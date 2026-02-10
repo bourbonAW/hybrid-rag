@@ -21,14 +21,15 @@ class SearchService:
         """Perform reasoning-based search."""
         start_time = time.time()
 
-        # Use VLM for PDF, LLM for text formats
+        # Use LLM for all formats (PageIndex already extracted text content)
+        search_result = await self.llm.search_tree(tree, query)
+
+        # Get results based on format
         if doc_format == "pdf":
-            search_result = await self.vlm.search_tree(tree, query)
             results = await self._get_pdf_results(
                 query, search_result, tree, storage_path, top_k
             )
         else:
-            search_result = await self.llm.search_tree(tree, query)
             results = await self._get_text_results(
                 query, search_result, tree, storage_path, top_k
             )
@@ -50,7 +51,7 @@ class SearchService:
         storage_path: str,
         top_k: int
     ) -> List[SearchResult]:
-        """Get results for PDF (with page images)."""
+        """Get results for PDF (using text content from PageIndex)."""
         node_list = search_result.get("node_list", [])[:top_k]
         thinking = search_result.get("thinking", "")
 
@@ -62,26 +63,23 @@ class SearchService:
             if not node:
                 continue
 
-            # Get page images for this node
-            page_images = []
-            pages_dir = Path(storage_path) / "pages"
-            for page_num in range(node["page_start"], node["page_end"] + 1):
-                img_path = pages_dir / f"page_{page_num:04d}.jpg"
-                if img_path.exists():
-                    page_images.append(str(img_path))
+            # Use node content extracted by PageIndex
+            # PageIndex stores text content in nodes during tree building
+            context = node.get("content", "") or node.get("text", "")
 
-            # Generate answer using VLM with images
-            if page_images:
-                answer = await self.vlm.answer_with_images(query, page_images)
-            else:
-                answer = "No visual content available"
+            # If no content in node, try to load from tree structure
+            if not context:
+                context = f"Section: {node.get('title', 'Unknown')}"
+
+            # Generate answer using LLM with text content
+            answer = await self.llm.answer_with_text(query, context)
 
             results.append(SearchResult(
                 node_id=node_id,
                 title=node["title"],
                 content=answer,
                 relevance_score=1.0,
-                page_refs=list(range(node["page_start"], node["page_end"] + 1)),
+                page_refs=list(range(node.get("page_start", 1), node.get("page_end", 1) + 1)),
                 reasoning_path=[thinking]
             ))
 
