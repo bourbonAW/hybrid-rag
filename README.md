@@ -4,7 +4,7 @@ Format-Adaptive RAG API service powered by [PageIndex](https://github.com/Vectif
 
 ## Features
 
-- 📄 **Multi-format support**: PDF, Markdown, TXT
+- 📄 **Multi-format support**: PDF, DOCX, Markdown, TXT
 - 🎯 **PageIndex Integration**: Advanced TOC detection, verification loops, and adaptive tree building
 - 🌳 **Hierarchical Tree Index**: Preserves document structure with reasoning-based navigation
 - 🔍 **Global Multi-Document Search**: LLM-powered document selection and answer synthesis
