@@ -37,6 +37,17 @@ class DocumentService:
                     str(original_path),
                     storage_dir
                 )
+            elif file_format == "docx":
+                # 将 DOCX 转换为 Markdown
+                md_content = self._convert_docx_to_markdown(original_path)
+                temp_md = storage_dir / "temp.md"
+                with open(temp_md, "w", encoding="utf-8") as f:
+                    f.write(md_content)
+                tree = await self.pageindex.build_tree_from_markdown(
+                    str(temp_md),
+                    storage_dir
+                )
+                temp_md.unlink()  # 删除临时文件
             elif file_format in ["md", "txt"]:
                 # 对于 txt 文件，先转换为临时 markdown 文件
                 # 因为 md_to_tree 需要 .md 扩展名
@@ -75,3 +86,55 @@ class DocumentService:
             with open(tree_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         return None
+
+    def _convert_docx_to_markdown(self, docx_path: Path) -> str:
+        """
+        将 DOCX 文件转换为 Markdown 格式
+
+        使用 python-docx 提取文档内容并转换为简单的 Markdown
+        """
+        try:
+            from docx import Document
+        except ImportError:
+            raise ImportError(
+                "python-docx is required for DOCX support. "
+                "Install it with: pip install python-docx"
+            )
+
+        doc = Document(docx_path)
+        markdown_lines = []
+
+        for paragraph in doc.paragraphs:
+            text = paragraph.text.strip()
+            if not text:
+                continue
+
+            # 根据样式判断标题级别
+            style_name = paragraph.style.name.lower()
+            if 'heading 1' in style_name:
+                markdown_lines.append(f"# {text}\n")
+            elif 'heading 2' in style_name:
+                markdown_lines.append(f"## {text}\n")
+            elif 'heading 3' in style_name:
+                markdown_lines.append(f"### {text}\n")
+            elif 'heading 4' in style_name:
+                markdown_lines.append(f"#### {text}\n")
+            elif 'heading 5' in style_name:
+                markdown_lines.append(f"##### {text}\n")
+            elif 'heading 6' in style_name:
+                markdown_lines.append(f"###### {text}\n")
+            else:
+                markdown_lines.append(f"{text}\n")
+
+        # 处理表格
+        for table in doc.tables:
+            markdown_lines.append("\n")
+            for i, row in enumerate(table.rows):
+                cells = [cell.text.strip() for cell in row.cells]
+                markdown_lines.append("| " + " | ".join(cells) + " |\n")
+                # 添加表格分隔线
+                if i == 0:
+                    markdown_lines.append("| " + " | ".join(["---"] * len(cells)) + " |\n")
+            markdown_lines.append("\n")
+
+        return "".join(markdown_lines)
