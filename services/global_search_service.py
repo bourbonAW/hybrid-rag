@@ -125,21 +125,22 @@ class GlobalSearchService:
         """
         阶段1: 基于 LLM 推理选择相关文档
         """
-        # 获取所有已完成的文档
+        # 获取所有已完成的文档（使用新的 SQLite 存储 API）
         all_documents = []
-        for doc_id, doc in self.doc_store._documents.items():
-            if doc.status.value == "completed":
-                # 获取文档树结构作为摘要
-                tree = self.doc_service.get_tree(doc_id)
-                if tree:
-                    # 提取文档的顶层标题和内容作为摘要
-                    summary = self._extract_document_summary(tree)
-                    all_documents.append({
-                        "doc_id": doc_id,
-                        "filename": doc.filename,
-                        "format": doc.format,
-                        "summary": summary
-                    })
+        completed_docs = await self.doc_store.list_completed_documents()
+
+        for doc in completed_docs:
+            # 获取文档树结构作为摘要
+            tree = self.doc_service.get_tree(doc.id)
+            if tree:
+                # 提取文档的顶层标题和内容作为摘要
+                summary = self._extract_document_summary(tree)
+                all_documents.append({
+                    "doc_id": doc.id,
+                    "filename": doc.filename,
+                    "format": doc.format,
+                    "summary": summary
+                })
 
         if not all_documents:
             return []

@@ -25,7 +25,8 @@ def mock_services():
         status=DocumentStatus.COMPLETED
     )
 
-    doc_store._documents = {"doc-1": doc1, "doc-2": doc2}
+    # Mock the async list_completed_documents method
+    doc_store.list_completed_documents = AsyncMock(return_value=[doc1, doc2])
 
     # Mock tree structure
     doc_service.get_tree.return_value = {
@@ -47,7 +48,7 @@ def mock_services():
 async def test_global_search_no_documents(mock_services):
     """测试没有文档时的情况"""
     doc_store, doc_service, search_service, llm = mock_services
-    doc_store._documents = {}
+    doc_store.list_completed_documents = AsyncMock(return_value=[])
 
     service = GlobalSearchService(doc_store, doc_service, search_service, llm)
     result = await service.search("test query")
@@ -148,14 +149,14 @@ async def test_global_search_api_endpoint():
 
     # Mock all services
     mock_doc_store = MagicMock()
-    mock_doc_store._documents = {
-        "doc-1": MagicMock(
+    mock_doc_store.list_completed_documents = AsyncMock(return_value=[
+        MagicMock(
             id="doc-1",
             filename="test.pdf",
             format="pdf",
             status=DocumentStatus.COMPLETED
         )
-    }
+    ])
 
     mock_global_search = MagicMock()
     mock_global_search.search = AsyncMock(return_value=MagicMock(
