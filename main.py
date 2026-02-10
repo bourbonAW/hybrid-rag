@@ -1,3 +1,4 @@
+import lib  # 配置 Python path for PageIndex
 import shutil
 import uuid
 from pathlib import Path
@@ -14,8 +15,7 @@ from models.document_store import DocumentStore
 from services.document_service import DocumentService
 from services.search_service import SearchService
 from services.global_search_service import GlobalSearchService
-from services.vlm_client import VLMClient
-from services.llm_client import LLMClient
+from services.legacy.llm_client import LLMClient  # 暂时保留用于 SearchService
 
 # Global instances
 doc_store: DocumentStore = None
@@ -32,10 +32,12 @@ async def lifespan(app: FastAPI):
     settings.storage_path.mkdir(parents=True, exist_ok=True)
 
     doc_store = DocumentStore()
-    doc_service = DocumentService(doc_store, settings.openai_api_key)
-    vlm = VLMClient(settings.openai_api_key, settings.openai_model, settings.openai_base_url)
+    doc_service = DocumentService(doc_store)  # 不再需要 api_key 参数
+
+    # search_service 和 global_search_service 暂时保留 LLMClient
+    # 因为它们只是读取 tree.json，不需要重建逻辑
     llm = LLMClient(settings.openai_api_key, settings.openai_model, settings.openai_base_url)
-    search_service = SearchService(vlm, llm)
+    search_service = SearchService(None, llm)  # vlm 参数设为 None
     global_search_service = GlobalSearchService(doc_store, doc_service, search_service, llm)
 
     yield

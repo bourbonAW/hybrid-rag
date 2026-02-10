@@ -1,0 +1,11 @@
+# PageIndex 配置
+# 基于 lib/pageindex/pageindex/config.yaml
+
+model: "gpt-4o-2024-11-20"
+toc_check_page_num: 20              # 检查前 20 页是否有 TOC
+max_page_num_each_node: 10          # 单节点最多 10 页
+max_token_num_each_node: 20000      # 单节点最多 20k tokens
+if_add_node_id: "yes"               # 添加节点 ID
+if_add_node_summary: "yes"          # 生成节点摘要
+if_add_doc_description: "yes"       # 生成文档描述（用于全局搜索）
+if_add_node_text: "no"              # 不在 tree 中存储完整文本（太大）

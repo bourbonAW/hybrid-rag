@@ -1,14 +1,13 @@
 import time
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from models.schemas import SearchResponse, SearchResult
-from services.vlm_client import VLMClient
-from services.llm_client import LLMClient
+from services.legacy.llm_client import LLMClient
 
 
 class SearchService:
-    def __init__(self, vlm: VLMClient, llm: LLMClient):
-        self.vlm = vlm
+    def __init__(self, vlm: Optional[Any], llm: LLMClient):
+        self.vlm = vlm  # 现在不使用，保留参数兼容性
         self.llm = llm
 
     async def search(

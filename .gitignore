@@ -5,3 +5,4 @@ storage/
 *.egg-info/
 .pytest_cache/
 .venv/
+services/legacy/

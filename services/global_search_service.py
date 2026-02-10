@@ -5,7 +5,7 @@ from models.schemas import SearchResult
 from models.document_store import DocumentStore
 from services.document_service import DocumentService
 from services.search_service import SearchService
-from services.llm_client import LLMClient
+from services.legacy.llm_client import LLMClient
 
 
 class DocumentCandidate:
