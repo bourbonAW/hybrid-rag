@@ -6,3 +6,5 @@ storage/
 .pytest_cache/
 .venv/
 services/legacy/
+data/*.db
+data/*.db-*
