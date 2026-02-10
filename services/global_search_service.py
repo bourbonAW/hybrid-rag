@@ -77,9 +77,12 @@ class GlobalSearchService:
             top_k_results_per_doc: 每个文档返回的结果数量
         """
         start_time = time.time()
+        print(f"[GlobalSearch] Starting global search for query: {query}")
 
         # 阶段1: 文档选择
+        print(f"[GlobalSearch] Phase 1: Document Selection")
         candidates = await self._select_documents(query, top_k_documents)
+        print(f"[GlobalSearch] Selected {len(candidates)} candidate documents")
 
         if not candidates:
             return GlobalSearchResult(
@@ -92,12 +95,16 @@ class GlobalSearchService:
             )
 
         # 阶段2: 并行检索每个文档
+        print(f"[GlobalSearch] Phase 2: Parallel Retrieval")
         retrieval_results = await self._parallel_retrieval(
             query, candidates, top_k_results_per_doc
         )
+        print(f"[GlobalSearch] Retrieved results from {len(retrieval_results)} documents")
 
         # 阶段3: 答案聚合
+        print(f"[GlobalSearch] Phase 3: Answer Synthesis")
         final_answer, sources = await self._synthesize_answer(query, retrieval_results)
+        print(f"[GlobalSearch] Final answer synthesized with {len(sources)} sources")
 
         processing_time = (time.time() - start_time) * 1000
 
@@ -137,6 +144,9 @@ class GlobalSearchService:
         if not all_documents:
             return []
 
+        print(f"[GlobalSearch] Found {len(all_documents)} completed documents")
+        print(f"[GlobalSearch] Document summaries prepared, calling LLM for selection...")
+
         # 用 LLM 分析并选择最相关的文档
         prompt = f"""给定用户问题和文档列表，选择最相关的 {top_k} 个文档。
 
@@ -159,12 +169,25 @@ class GlobalSearchService:
 
 只返回 JSON，不要其他文字。最多返回 {top_k} 个文档。"""
 
-        response = await self.llm.client.chat.completions.create(
-            model=self.llm.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=2000
-        )
+        try:
+            print(f"[GlobalSearch] Calling LLM API: {self.llm.client.base_url} with model {self.llm.model}")
+            response = await asyncio.wait_for(
+                self.llm.client.chat.completions.create(
+                    model=self.llm.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0,
+                    max_tokens=2000,
+                    timeout=60.0
+                ),
+                timeout=120.0
+            )
+            print(f"[GlobalSearch] LLM response received")
+        except asyncio.TimeoutError:
+            print(f"[GlobalSearch] ERROR: LLM API call timed out after 120 seconds")
+            raise Exception("LLM API 调用超时，请检查网络连接和 API 配置")
+        except Exception as e:
+            print(f"[GlobalSearch] ERROR: LLM API call failed: {e}")
+            raise
 
         result_text = response.choices[0].message.content
         if "```json" in result_text:
@@ -309,12 +332,25 @@ class GlobalSearchService:
 
 请直接给出答案，不要额外的解释。"""
 
-        response = await self.llm.client.chat.completions.create(
-            model=self.llm.model,
-            messages=[{"role": "user", "content": synthesis_prompt}],
-            temperature=0.3,
-            max_tokens=2000
-        )
+        try:
+            print(f"[GlobalSearch] Calling LLM for answer synthesis...")
+            response = await asyncio.wait_for(
+                self.llm.client.chat.completions.create(
+                    model=self.llm.model,
+                    messages=[{"role": "user", "content": synthesis_prompt}],
+                    temperature=0.3,
+                    max_tokens=2000,
+                    timeout=60.0
+                ),
+                timeout=120.0
+            )
+            print(f"[GlobalSearch] Answer synthesis completed")
+        except asyncio.TimeoutError:
+            print(f"[GlobalSearch] ERROR: Answer synthesis timed out")
+            return "生成答案时超时，请稍后重试。", sources
+        except Exception as e:
+            print(f"[GlobalSearch] ERROR: Answer synthesis failed: {e}")
+            return f"生成答案时出错：{str(e)}", sources
 
         final_answer = response.choices[0].message.content
 
