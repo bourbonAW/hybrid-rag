@@ -55,3 +55,26 @@ class SearchResponse(BaseModel):
     results: List[SearchResult]
     total_nodes: int
     processing_time_ms: float
+
+
+class GlobalSearchRequest(BaseModel):
+    query: str
+    top_k_documents: int = 3
+    top_k_results_per_doc: int = 2
+
+
+class DocumentSource(BaseModel):
+    document_id: str
+    document_name: str
+    section_title: str
+    page_refs: List[int]
+    node_id: str
+
+
+class GlobalSearchResponse(BaseModel):
+    query: str
+    final_answer: str
+    sources: List[DocumentSource]
+    document_selection_reasoning: str
+    total_documents_searched: int
+    processing_time_ms: float

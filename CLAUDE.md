@@ -57,6 +57,15 @@ uv run pytest -v -m integration
 
 ### Service Layer (Format-Adaptive Strategy Pattern)
 
+**GlobalSearchService** (`services/global_search_service.py`) ⭐ **NEW**
+- **Primary interface for user Q&A** - handles multi-document scenarios
+- Three-phase pipeline following PageIndex best practices:
+  1. Document Selection: LLM analyzes all document summaries, ranks by relevance
+  2. Parallel Retrieval: Async retrieval from top-k documents simultaneously
+  3. Answer Synthesis: LLM aggregates multiple sources into coherent answer
+- Automatically handles cross-document queries without manual document ID specification
+- Returns comprehensive answers with source citations (document + page refs)
+
 **DocumentService** (`services/document_service.py`)
 - Orchestrates document processing with format-specific strategies
 - Routes PDF → VLMClient (vision-based), Text → LLMClient (text-based)
@@ -65,6 +74,12 @@ uv run pytest -v -m integration
   - `tree.json` - hierarchical index
   - `pages/` - PDF page images (for PDF only)
   - `content.txt` - full text (for text formats only)
+
+**SearchService** (`services/search_service.py`)
+- Performs LLM-based reasoning retrieval over **single document** tree indexes
+- Two-phase search: 1) LLM identifies relevant nodes, 2) LLM generates answers
+- Format-aware: uses VLM for PDFs (with page images), LLM for text
+- Used by GlobalSearchService for per-document retrieval
 
 **VLMClient** (`services/vlm_client.py`)
 - Uses OpenAI Vision API to analyze PDF page images
@@ -76,11 +91,6 @@ uv run pytest -v -m integration
 - Extracts hierarchy from headers and content
 - Methods: `build_tree_from_markdown()`, `search_tree()`, `answer_with_text()`
 
-**SearchService** (`services/search_service.py`)
-- Performs LLM-based reasoning retrieval over tree indexes
-- Two-phase search: 1) LLM identifies relevant nodes, 2) LLM generates answers
-- Format-aware: uses VLM for PDFs (with page images), LLM for text
-
 ### Data Flow
 
 **Document Processing (Async Background Task):**
@@ -91,7 +101,24 @@ uv run pytest -v -m integration
 5. Tree structure saved to `{doc_id}/tree.json`
 6. Status updated: PENDING → PROCESSING → COMPLETED/FAILED
 
-**Search Flow:**
+**Global Search Flow (Multi-Document Q&A):**
+1. **Phase 1: Document Selection**
+   - Retrieve all COMPLETED documents with summaries
+   - LLM analyzes relevance and selects top-k documents
+   - Returns ranked candidates with reasoning
+
+2. **Phase 2: Parallel Retrieval**
+   - For each selected document: execute tree-based search
+   - Runs in parallel using `asyncio.gather()`
+   - Collects relevant sections from all documents
+
+3. **Phase 3: Answer Synthesis** (Critical)
+   - Aggregate content from multiple sources
+   - LLM synthesizes comprehensive answer
+   - Includes source citations (document name + page refs)
+   - Handles contradictions between documents
+
+**Single-Document Search Flow:**
 1. Check document status (must be COMPLETED)
 2. Load tree from `{doc_id}/tree.json`
 3. `SearchService.search()` → LLM reasoning → relevant nodes
@@ -142,12 +169,20 @@ main.doc_service = mock_service_instance
 
 ## API Endpoints
 
+### Global Search (Primary Interface)
+- `POST /api/v1/search` - **Multi-document global search** (recommended for Q&A)
+  - Automatically selects relevant documents using LLM reasoning
+  - Retrieves content from multiple documents in parallel
+  - Synthesizes comprehensive answer with source citations
+  - No document ID required - ideal for user questions
+
+### Document Management
 All endpoints prefixed with `/api/v1/documents/`:
 
 - `POST /upload` - Upload document, returns `document_id`, starts background processing
 - `GET /{doc_id}/status` - Check processing status and metadata
 - `GET /{doc_id}/tree` - Retrieve hierarchical tree structure (requires COMPLETED)
-- `POST /{doc_id}/search` - Search with query, returns ranked results with reasoning
+- `POST /{doc_id}/search` - Search within specific document (requires known doc_id)
 - `DELETE /{doc_id}` - Delete document and all associated storage
 
 ## Key Dependencies

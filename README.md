@@ -30,19 +30,42 @@ uv run uvicorn main:app --reload
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/api/v1/search` | POST | **🌟 Global search** across all documents (recommended) |
 | `/api/v1/documents/upload` | POST | Upload document (PDF/MD/TXT) |
 | `/api/v1/documents/{id}/status` | GET | Check processing status |
 | `/api/v1/documents/{id}/tree` | GET | Get document tree structure |
-| `/api/v1/documents/{id}/search` | POST | Search document |
+| `/api/v1/documents/{id}/search` | POST | Search within a specific document |
 | `/api/v1/documents/{id}` | DELETE | Delete document |
 
 ## Example Usage
+
+### Global Search (Recommended)
+When you don't know which document contains the answer:
+
+```bash
+# Global search across all documents
+curl -X POST http://localhost:8000/api/v1/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What is the main topic?",
+    "top_k_documents": 3,
+    "top_k_results_per_doc": 2
+  }'
+```
+
+The system will:
+1. **Select** the most relevant documents using LLM reasoning
+2. **Retrieve** relevant content from each document in parallel
+3. **Synthesize** a comprehensive answer from multiple sources
+
+### Single Document Search
+When you know the specific document:
 
 ```bash
 # Upload PDF
 curl -X POST -F "file=@document.pdf" http://localhost:8000/api/v1/documents/upload
 
-# Search document
+# Search within specific document
 curl -X POST http://localhost:8000/api/v1/documents/{id}/search \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the main topic?"}'

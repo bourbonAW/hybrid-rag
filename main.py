@@ -6,10 +6,14 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from config import settings
-from models.schemas import DocumentStatus, SearchRequest, SearchResponse
+from models.schemas import (
+    DocumentStatus, SearchRequest, SearchResponse,
+    GlobalSearchRequest, GlobalSearchResponse
+)
 from models.document_store import DocumentStore
 from services.document_service import DocumentService
 from services.search_service import SearchService
+from services.global_search_service import GlobalSearchService
 from services.vlm_client import VLMClient
 from services.llm_client import LLMClient
 
@@ -17,12 +21,13 @@ from services.llm_client import LLMClient
 doc_store: DocumentStore = None
 doc_service: DocumentService = None
 search_service: SearchService = None
+global_search_service: GlobalSearchService = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize services on startup."""
-    global doc_store, doc_service, search_service
+    global doc_store, doc_service, search_service, global_search_service
 
     settings.storage_path.mkdir(parents=True, exist_ok=True)
 
@@ -31,6 +36,7 @@ async def lifespan(app: FastAPI):
     vlm = VLMClient(settings.openai_api_key, settings.openai_model, settings.openai_base_url)
     llm = LLMClient(settings.openai_api_key, settings.openai_model, settings.openai_base_url)
     search_service = SearchService(vlm, llm)
+    global_search_service = GlobalSearchService(doc_store, doc_service, search_service, llm)
 
     yield
 
@@ -169,6 +175,27 @@ async def delete_document(doc_id: str):
         shutil.rmtree(storage_dir)
 
     return {"message": "Document deleted successfully"}
+
+
+@app.post("/api/v1/search", response_model=GlobalSearchResponse)
+async def global_search(request: GlobalSearchRequest):
+    """
+    全局多文档搜索 - 自动选择相关文档并综合答案
+
+    这个端点会：
+    1. 从所有文档中选择最相关的文档
+    2. 并行检索每个文档的相关内容
+    3. 用 LLM 综合生成最终答案
+
+    适用场景：用户不知道答案在哪个文档中
+    """
+    result = await global_search_service.search(
+        query=request.query,
+        top_k_documents=request.top_k_documents,
+        top_k_results_per_doc=request.top_k_results_per_doc
+    )
+
+    return GlobalSearchResponse(**result.to_dict())
 
 
 @app.get("/health")
