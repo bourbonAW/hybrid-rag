@@ -5,8 +5,10 @@ PageIndex 包装层
 参考文档：docs/pageindex_api_exploration.md
 """
 import yaml
+import asyncio
 from pathlib import Path
 from typing import Dict, Any
+from functools import partial
 from config import settings
 
 
@@ -42,18 +44,23 @@ class PageIndexWrapper:
         """
         from pageindex.page_index import page_index
 
-        # 调用 PageIndex 核心函数
-        # 注意：page_index 是同步函数，内部使用 asyncio.run()
-        result = page_index(
-            doc=pdf_path,
-            model=self.model,
-            toc_check_page_num=self.config.get("toc_check_page_num", 20),
-            max_page_num_each_node=self.config.get("max_page_num_each_node", 10),
-            max_token_num_each_node=self.config.get("max_token_num_each_node", 20000),
-            if_add_node_id=self.config.get("if_add_node_id", "yes"),
-            if_add_node_summary=self.config.get("if_add_node_summary", "yes"),
-            if_add_doc_description=self.config.get("if_add_doc_description", "yes"),
-            if_add_node_text=self.config.get("if_add_node_text", "no")
+        # page_index 是同步函数，内部使用 asyncio.run()
+        # 在 async 上下文中需要在线程池中运行，避免事件循环冲突
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,  # 使用默认执行器
+            partial(
+                page_index,
+                doc=pdf_path,
+                model=self.model,
+                toc_check_page_num=self.config.get("toc_check_page_num", 20),
+                max_page_num_each_node=self.config.get("max_page_num_each_node", 10),
+                max_token_num_each_node=self.config.get("max_token_num_each_node", 20000),
+                if_add_node_id=self.config.get("if_add_node_id", "yes"),
+                if_add_node_summary=self.config.get("if_add_node_summary", "yes"),
+                if_add_doc_description=self.config.get("if_add_doc_description", "yes"),
+                if_add_node_text=self.config.get("if_add_node_text", "no")
+            )
         )
 
         # 转换为我们的 API 格式
