@@ -64,8 +64,8 @@ class SearchService:
                 continue
 
             # Use node content extracted by PageIndex
-            # PageIndex stores text content in nodes during tree building
-            context = node.get("content", "") or node.get("text", "")
+            # PageIndex uses "summary" field for node summaries
+            context = node.get("summary", "") or node.get("content", "") or node.get("text", "")
 
             # If no content in node, try to load from tree structure
             if not context:
@@ -74,12 +74,16 @@ class SearchService:
             # Generate answer using LLM with text content
             answer = await self.llm.answer_with_text(query, context)
 
+            # PageIndex uses "start_index" and "end_index" for page ranges
+            page_start = node.get("start_index") or node.get("page_start", 1)
+            page_end = node.get("end_index") or node.get("page_end", page_start)
+
             results.append(SearchResult(
                 node_id=node_id,
                 title=node["title"],
                 content=answer,
                 relevance_score=1.0,
-                page_refs=list(range(node.get("page_start", 1), node.get("page_end", 1) + 1)),
+                page_refs=list(range(page_start, page_end + 1)),
                 reasoning_path=[thinking]
             ))
 
@@ -131,8 +135,13 @@ class SearchService:
         """Flatten tree to node_id -> node mapping."""
         result = {}
         for node in nodes:
-            node_id = node["id"]
-            result[node_id] = node
-            if "children" in node and node["children"]:
-                result.update(self._build_node_map(node["children"]))
+            # PageIndex uses "node_id" as the field name
+            node_id = node.get("node_id") or node.get("id")
+            if node_id:
+                result[node_id] = node
+                # Recursively process children nodes
+                if "nodes" in node and node["nodes"]:
+                    result.update(self._build_node_map(node["nodes"]))
+                elif "children" in node and node["children"]:
+                    result.update(self._build_node_map(node["children"]))
         return result
