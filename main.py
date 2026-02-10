@@ -28,8 +28,8 @@ async def lifespan(app: FastAPI):
 
     doc_store = DocumentStore()
     doc_service = DocumentService(doc_store, settings.openai_api_key)
-    vlm = VLMClient(settings.openai_api_key, settings.openai_model)
-    llm = LLMClient(settings.openai_api_key, settings.openai_model)
+    vlm = VLMClient(settings.openai_api_key, settings.openai_model, settings.openai_base_url)
+    llm = LLMClient(settings.openai_api_key, settings.openai_model, settings.openai_base_url)
     search_service = SearchService(vlm, llm)
 
     yield

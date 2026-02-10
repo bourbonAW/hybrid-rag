@@ -13,8 +13,8 @@ from config import settings
 class DocumentService:
     def __init__(self, store: DocumentStore, api_key: str):
         self.store = store
-        self.vlm = VLMClient(api_key, settings.openai_model)
-        self.llm = LLMClient(api_key, settings.openai_model)
+        self.vlm = VLMClient(api_key, settings.openai_model, settings.openai_base_url)
+        self.llm = LLMClient(api_key, settings.openai_model, settings.openai_base_url)
 
     async def process_document(
         self,

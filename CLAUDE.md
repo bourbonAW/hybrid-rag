@@ -130,6 +130,7 @@ main.doc_service = mock_service_instance
 
 **Required Environment Variables** (`.env`):
 - `OPENAI_API_KEY` - OpenAI API key (required)
+- `OPENAI_BASE_URL` - OpenAI API base URL (default: "https://api.openai.com/v1", supports OpenAI-compatible APIs)
 - `OPENAI_MODEL` - Model to use (default: "gpt-4o-mini")
 - `STORAGE_PATH` - Document storage directory (default: "./storage")
 - `MAX_FILE_SIZE` - Max upload size in bytes (default: 100MB)

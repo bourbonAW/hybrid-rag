@@ -19,7 +19,8 @@ uv sync
 
 # Set environment variables
 cp .env.example .env
-# Edit .env with your OpenAI API key
+# Edit .env with your OpenAI API key and optionally base URL
+# OPENAI_BASE_URL can be customized for OpenAI-compatible APIs
 
 # Run server
 uv run uvicorn main:app --reload

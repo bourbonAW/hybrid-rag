@@ -5,8 +5,8 @@ from openai import AsyncOpenAI
 
 
 class VLMClient:
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
-        self.client = AsyncOpenAI(api_key=api_key)
+    def __init__(self, api_key: str, model: str = "gpt-4o-mini", base_url: str = "https://api.openai.com/v1"):
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.model = model
 
     async def build_tree_from_images(
