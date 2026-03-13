@@ -1,7 +1,7 @@
 [project]
-name = "pageindexpractice"
+name = "hybrid-search-practice"
 version = "0.1.0"
-description = "Format-Adaptive PageIndex RAG API Service"
+description = "Hybrid Search Practice - A playground for experimenting with multiple RAG/Hybrid Search approaches (PageIndex, LightRAG, HiRAG, etc.)"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.109.0",
@@ -13,7 +13,9 @@ dependencies = [
     "pymupdf>=1.23.0",
     "python-docx>=1.1.0",
     "aiofiles>=23.2.0",
+    # Hybrid Search modules dependencies
     "pageindex>=0.2.5",
+    "lightrag-hku>=1.4.10",          # LightRAG - Graph-based dual-level retrieval
     # PageIndex submodule dependencies
     "PyPDF2>=3.0.1",
     "python-dotenv>=1.0.0",
@@ -23,6 +25,9 @@ dependencies = [
     # Database dependencies
     "sqlalchemy>=2.0.0",
     "aiosqlite>=0.19.0",
+    # Graph and ML dependencies (for LightRAG/HiRAG)
+    "networkx>=3.0",
+    "numpy>=1.24",
 ]
 
 [dependency-groups]
@@ -36,3 +41,5 @@ dev = [
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
 ]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

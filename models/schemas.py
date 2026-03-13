@@ -61,6 +61,10 @@ class GlobalSearchRequest(BaseModel):
     query: str
     top_k_documents: int = 3
     top_k_results_per_doc: int = 2
+    strategy: Literal["auto", "pageindex", "lightrag", "hybrid"] = Field(
+        default="auto",
+        description="搜索策略: auto=自动选择, pageindex=仅PageIndex深度分析, lightrag=仅LightRAG快速检索, hybrid=混合策略"
+    )
 
 
 class DocumentSource(BaseModel):

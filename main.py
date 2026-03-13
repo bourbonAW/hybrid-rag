@@ -15,34 +15,67 @@ from models.document_store import DocumentStore
 from services.document_service import DocumentService
 from services.search_service import SearchService
 from services.global_search_service import GlobalSearchService
-from services.legacy.llm_client import LLMClient  # 暂时保留用于 SearchService
+from services.legacy.llm_client import LLMClient
+
+# Import LightRAG wrapper
+try:
+    from lib.lightrag import LightRAGWrapper
+    LIGHTRAG_AVAILABLE = True
+except ImportError:
+    LIGHTRAG_AVAILABLE = False
+    LightRAGWrapper = None
 
 # Global instances
 doc_store: DocumentStore = None
 doc_service: DocumentService = None
 search_service: SearchService = None
 global_search_service: GlobalSearchService = None
+lightrag_wrapper = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize services on startup."""
-    global doc_store, doc_service, search_service, global_search_service
+    global doc_store, doc_service, search_service, global_search_service, lightrag_wrapper
 
     settings.storage_path.mkdir(parents=True, exist_ok=True)
 
     doc_store = DocumentStore()
-    doc_service = DocumentService(doc_store)  # 不再需要 api_key 参数
+    
+    # 初始化 LightRAG wrapper（如果可用）
+    if LIGHTRAG_AVAILABLE:
+        try:
+            lightrag_wrapper = LightRAGWrapper()
+            await lightrag_wrapper.initialize()
+            print("[Startup] LightRAG initialized successfully")
+        except Exception as e:
+            print(f"[Startup] LightRAG initialization failed: {e}")
+            lightrag_wrapper = None
+    else:
+        print("[Startup] LightRAG not available")
+    
+    # 创建 DocumentService，传入 LightRAG wrapper
+    doc_service = DocumentService(
+        store=doc_store,
+        lightrag_wrapper=lightrag_wrapper
+    )
 
-    # search_service 和 global_search_service 暂时保留 LLMClient
-    # 因为它们只是读取 tree.json，不需要重建逻辑
+    # search_service 和 global_search_service 初始化
     llm = LLMClient(settings.openai_api_key, settings.openai_model, settings.openai_base_url)
     search_service = SearchService(None, llm)  # vlm 参数设为 None
-    global_search_service = GlobalSearchService(doc_store, doc_service, search_service, llm)
+    global_search_service = GlobalSearchService(
+        doc_store=doc_store,
+        doc_service=doc_service,
+        search_service=search_service,
+        llm=llm,
+        lightrag_wrapper=lightrag_wrapper
+    )
 
     yield
 
-    # Cleanup if needed
+    # Cleanup
+    if lightrag_wrapper:
+        await lightrag_wrapper.close()
 
 
 app = FastAPI(
@@ -190,11 +223,21 @@ async def global_search(request: GlobalSearchRequest):
     3. 用 LLM 综合生成最终答案
 
     适用场景：用户不知道答案在哪个文档中
+    
+    策略 (strategy):
+    - "auto": 自动选择（默认）
+    - "pageindex": 仅使用 PageIndex（深度分析）
+    - "lightrag": 仅使用 LightRAG（快速检索）
+    - "hybrid": 混合策略（推荐）
     """
+    # 获取策略参数（如果请求模型支持）
+    strategy = getattr(request, 'strategy', 'auto')
+    
     result = await global_search_service.search(
         query=request.query,
         top_k_documents=request.top_k_documents,
-        top_k_results_per_doc=request.top_k_results_per_doc
+        top_k_results_per_doc=request.top_k_results_per_doc,
+        strategy=strategy
     )
 
     return GlobalSearchResponse(**result.to_dict())

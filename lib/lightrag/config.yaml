@@ -1,0 +1,47 @@
+# lib/lightrag/config.yaml
+# LightRAG 模块默认配置
+# 注意：这些配置直接对应 lightrag-hku 的官方参数
+
+# 功能开关
+enabled: true
+
+# LLM 配置（复用项目现有 LLM 配置）
+llm:
+  model: "gpt-4o-mini"           # 与项目主配置一致
+  max_async_calls: 4
+  max_tokens: 4000
+  temperature: 0.0
+
+# 嵌入配置
+embedding:
+  model: "text-embedding-3-large"
+  dimensions: 3072
+  max_token_size: 8192
+
+# 分块配置（lightrag-hku 原生支持）
+chunking:
+  chunk_token_size: 1200         # 对应 chunk_token_size 参数
+  chunk_overlap_token_size: 100  # 对应 chunk_overlap_token_size 参数
+
+# 存储配置（lightrag-hku 原生支持多种后端）
+# 注意：working_dir 使用相对于项目根目录的路径
+storage:
+  working_dir: "./storage/lightrag"
+  kv_storage: "JsonKVStorage"           # 文档、文本块、缓存
+  vector_storage: "NanoVectorDBStorage" # 向量存储
+  graph_storage: "NetworkXStorage"      # 图存储
+  doc_status_storage: "JsonDocStatusStorage"
+
+# 模块元数据
+module:
+  name: "lightrag"
+  version: "1.4.10"
+  source: "pypi"  # 标识来源：pypi / submodule / custom
+
+# 检索配置（lightrag-hku 原生支持）
+retrieval:
+  default_mode: "hybrid"         # local/global/hybrid/naive/mix
+  top_k: 60                      # 检索实体/关系数量
+  max_entity_tokens: 6000        # 实体上下文最大 tokens
+  max_relation_tokens: 8000      # 关系上下文最大 tokens
+  max_total_tokens: 30000        # 总上下文限制

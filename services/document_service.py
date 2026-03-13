@@ -1,18 +1,33 @@
 import json
 import shutil
-import tempfile
+import asyncio
 from pathlib import Path
 from typing import Optional
 from models.schemas import DocumentStatus
 from models.document_store import DocumentStore
 from services.pageindex_wrapper import PageIndexWrapper
+
+# Import LightRAG wrapper
+try:
+    from lib.lightrag import LightRAGWrapper
+    LIGHTRAG_AVAILABLE = True
+except ImportError:
+    LIGHTRAG_AVAILABLE = False
+    LightRAGWrapper = None
+
 from config import settings
 
 
 class DocumentService:
-    def __init__(self, store: DocumentStore):
+    def __init__(
+        self,
+        store: DocumentStore,
+        pageindex_wrapper: Optional[PageIndexWrapper] = None,
+        lightrag_wrapper: Optional["LightRAGWrapper"] = None,
+    ):
         self.store = store
-        self.pageindex = PageIndexWrapper()
+        self.pageindex = pageindex_wrapper or PageIndexWrapper()
+        self.lightrag = lightrag_wrapper
 
     async def process_document(
         self,
@@ -20,7 +35,7 @@ class DocumentService:
         file_path: str,
         file_format: str
     ) -> bool:
-        """Process document and build tree index."""
+        """Process document and build tree index - 并行构建 PageIndex 和 LightRAG 索引"""
         try:
             await self.store.update_status(doc_id, DocumentStatus.PROCESSING)
 
@@ -31,53 +46,134 @@ class DocumentService:
             original_path = storage_dir / f"original.{file_format}"
             shutil.copy(file_path, original_path)
 
-            # 根据格式路由到 PageIndex 不同函数
-            if file_format == "pdf":
-                tree = await self.pageindex.build_tree_from_pdf(
-                    str(original_path),
-                    storage_dir
-                )
-            elif file_format == "docx":
-                # 将 DOCX 转换为 Markdown
-                md_content = self._convert_docx_to_markdown(original_path)
-                temp_md = storage_dir / "temp.md"
-                with open(temp_md, "w", encoding="utf-8") as f:
-                    f.write(md_content)
-                tree = await self.pageindex.build_tree_from_markdown(
-                    str(temp_md),
-                    storage_dir
-                )
-                temp_md.unlink()  # 删除临时文件
-            elif file_format in ["md", "txt"]:
-                # 对于 txt 文件，先转换为临时 markdown 文件
-                # 因为 md_to_tree 需要 .md 扩展名
-                if file_format == "txt":
-                    temp_md = storage_dir / "temp.md"
-                    shutil.copy(original_path, temp_md)
-                    tree = await self.pageindex.build_tree_from_markdown(
-                        str(temp_md),
-                        storage_dir
-                    )
-                    temp_md.unlink()  # 删除临时文件
-                else:
-                    tree = await self.pageindex.build_tree_from_markdown(
-                        str(original_path),
-                        storage_dir
-                    )
-            else:
-                raise ValueError(f"Unsupported format: {file_format}")
-
-            # Save tree to JSON
-            tree_path = storage_dir / "tree.json"
-            with open(tree_path, "w", encoding="utf-8") as f:
-                json.dump(tree, f, indent=2, ensure_ascii=False)
-
+            # 提取文本（根据格式）
+            text = await self._extract_text(original_path, file_format)
+            
+            # 并行构建索引
+            tasks = []
+            
+            if self.pageindex:
+                tasks.append(self._build_pageindex(doc_id, original_path, file_format, storage_dir))
+            
+            if self.lightrag and LIGHTRAG_AVAILABLE:
+                tasks.append(self._build_lightrag(doc_id, text))
+            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # 检查错误
+            errors = []
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    error_msg = f"Index {i} failed: {result}"
+                    print(f"[DocumentService] {error_msg}")
+                    errors.append(error_msg)
+            
+            if errors and len(errors) == len(tasks):
+                # 所有索引都失败了
+                raise Exception(f"All index builds failed: {'; '.join(errors)}")
+            
             await self.store.update_status(doc_id, DocumentStatus.COMPLETED)
             return True
 
         except Exception as e:
             await self.store.update_status(doc_id, DocumentStatus.FAILED, str(e))
             return False
+
+    async def _extract_text(self, file_path: Path, file_format: str) -> str:
+        """从文件中提取纯文本"""
+        if file_format == "txt":
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+        elif file_format == "md":
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+        elif file_format == "docx":
+            # 复用 _convert_docx_to_markdown 的逻辑
+            return self._convert_docx_to_markdown(file_path)
+        elif file_format == "pdf":
+            # 使用 PyMuPDF 提取文本
+            try:
+                import fitz  # PyMuPDF
+                doc = fitz.open(file_path)
+                text_parts = []
+                for page in doc:
+                    text_parts.append(page.get_text())
+                doc.close()
+                return "\n\n".join(text_parts)
+            except ImportError:
+                raise ImportError("PyMuPDF is required for PDF text extraction")
+        else:
+            raise ValueError(f"Unsupported format for text extraction: {file_format}")
+
+    async def _build_pageindex(
+        self,
+        doc_id: str,
+        original_path: Path,
+        file_format: str,
+        storage_dir: Path
+    ) -> dict:
+        """构建 PageIndex 索引"""
+        print(f"[DocumentService] Building PageIndex for {doc_id}")
+        
+        # 根据格式路由到 PageIndex 不同函数
+        if file_format == "pdf":
+            tree = await self.pageindex.build_tree_from_pdf(
+                str(original_path),
+                storage_dir
+            )
+        elif file_format == "docx":
+            # 将 DOCX 转换为 Markdown
+            md_content = self._convert_docx_to_markdown(original_path)
+            temp_md = storage_dir / "temp.md"
+            with open(temp_md, "w", encoding="utf-8") as f:
+                f.write(md_content)
+            tree = await self.pageindex.build_tree_from_markdown(
+                str(temp_md),
+                storage_dir
+            )
+            temp_md.unlink()  # 删除临时文件
+        elif file_format in ["md", "txt"]:
+            # 对于 txt 文件，先转换为临时 markdown 文件
+            # 因为 md_to_tree 需要 .md 扩展名
+            if file_format == "txt":
+                temp_md = storage_dir / "temp.md"
+                shutil.copy(original_path, temp_md)
+                tree = await self.pageindex.build_tree_from_markdown(
+                    str(temp_md),
+                    storage_dir
+                )
+                temp_md.unlink()  # 删除临时文件
+            else:
+                tree = await self.pageindex.build_tree_from_markdown(
+                    str(original_path),
+                    storage_dir
+                )
+        else:
+            raise ValueError(f"Unsupported format: {file_format}")
+
+        # Save tree to JSON
+        tree_path = storage_dir / "tree.json"
+        with open(tree_path, "w", encoding="utf-8") as f:
+            json.dump(tree, f, indent=2, ensure_ascii=False)
+        
+        print(f"[DocumentService] PageIndex built for {doc_id}")
+        return tree
+
+    async def _build_lightrag(self, document_id: str, text: str) -> dict:
+        """构建 LightRAG 索引"""
+        print(f"[DocumentService] Building LightRAG index for {document_id}")
+        
+        # 确保 LightRAG 已初始化
+        await self.lightrag.initialize()
+        
+        # 调用包装器（内部使用 lightrag-hku 的 ainsert）
+        result = await self.lightrag.index_document(
+            document_id=document_id,
+            text=text,
+        )
+        
+        print(f"[DocumentService] LightRAG index built for {document_id}")
+        return result
 
     def get_tree(self, doc_id: str) -> Optional[dict]:
         """Load tree structure from storage."""
