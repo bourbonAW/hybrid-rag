@@ -252,6 +252,31 @@ with patch('services.legacy.llm_client.AsyncOpenAI') as mock:
 - **Error handling**: Explicit try/except with meaningful error messages
 - **Path handling**: Use `pathlib.Path` instead of string paths
 
+### Code Quality Tools
+
+项目使用以下工具保证代码质量（详见 `CODE_QUALITY.md`）：
+
+| 工具 | 用途 | 命令 |
+|------|------|------|
+| **Ruff** | Linter + Formatter | `make format` / `make lint` |
+| **MyPy** | 类型检查 | `uv run mypy .` |
+| **Pre-commit** | Git hooks | `make dev` |
+
+**快速开始：**
+```bash
+# 安装开发依赖并启用 git hooks
+make dev
+
+# 提交前自动检查
+# (pre-commit hooks 会在 git commit 时自动运行)
+
+# 手动格式化代码
+make format
+
+# 手动代码检查
+make lint
+```
+
 ### Example Pattern
 ```python
 from typing import Dict, Any, Optional

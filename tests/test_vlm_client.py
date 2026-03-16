@@ -1,5 +1,6 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, mock_open
 from services.vlm_client import VLMClient
 
 
@@ -9,7 +10,7 @@ async def test_build_tree_from_images(tmp_path):
     img_path = tmp_path / "page1.jpg"
     img_path.write_bytes(b"fake image data")
 
-    with patch('services.vlm_client.AsyncOpenAI') as mock_client_class:
+    with patch("services.vlm_client.AsyncOpenAI") as mock_client_class:
         mock_client = AsyncMock()
         mock_response = AsyncMock()
         mock_response.choices = [AsyncMock(message=AsyncMock(content='{"nodes": []}'))]
@@ -24,7 +25,7 @@ async def test_build_tree_from_images(tmp_path):
 
 @pytest.mark.asyncio
 async def test_search_tree():
-    with patch('services.vlm_client.AsyncOpenAI') as mock_client_class:
+    with patch("services.vlm_client.AsyncOpenAI") as mock_client_class:
         mock_client = AsyncMock()
         mock_response = AsyncMock()
         mock_response.choices = [AsyncMock(message=AsyncMock(content='{"node_list": ["0001"]}'))]

@@ -16,7 +16,7 @@ The `lib/` directory serves as a unified location for:
 |--------|--------|--------|-------------|
 | [pageindex](pageindex/) | Git Submodule | ✅ Active | TOC-aware tree-based RAG with reasoning-based navigation |
 | [lightrag](lightrag/) | PyPI | ✅ Active | Graph-based RAG with dual-level retrieval (entities + communities) |
-| hirag | Planned | 📋 Planned | Hierarchical knowledge indexing with GMM clustering |
+| [hirag_wrapper](hirag_wrapper/) | Git Submodule | ✅ Active | Hierarchical knowledge indexing with GMM clustering |
 
 ## Directory Structure
 
@@ -32,8 +32,14 @@ lib/
 │   ├── __init__.py        # Module exports
 │   ├── wrapper.py         # LightRAGWrapper implementation
 │   └── config.yaml        # Module configuration
-└── hirag/                 # HiRAG integration (to be created)
-    └── ...
+├── hirag/                 # HiRAG official repo (git submodule)
+│   ├── hirag/             # Core Python package
+│   ├── eval/              # Evaluation scripts
+│   └── ...
+└── hirag_wrapper/         # HiRAG wrapper for this project
+    ├── __init__.py        # Module exports
+    ├── wrapper.py         # HiRAGWrapper implementation
+    └── config.yaml        # Module configuration
 ```
 
 ## Integration Approaches
@@ -203,13 +209,14 @@ retrieval:
 
 | Feature | PageIndex | LightRAG | HiRAG |
 |---------|-----------|----------|-------|
-| **Data Structure** | Tree | Graph | Hierarchy |
+| **Data Structure** | Tree | Graph | Hierarchical Graph |
 | **Best For** | Single-document deep analysis | Multi-document discovery | Complex hierarchical docs |
-| **Retrieval** | Reasoning-based tree navigation | Entity + Community dual-level | Multi-level traversal |
+| **Retrieval** | Reasoning-based tree navigation | Entity + Community dual-level | Local + Global + Bridge |
 | **TOC Awareness** | ✅ Native | ⚠️ Requires preprocessing | ⚠️ Requires preprocessing |
 | **Incremental Update** | ❌ | ✅ | ✅ |
 | **Scalability** | <5 docs optimal | 50+ docs | 100+ docs |
 | **Latency** | 5-15s (multi-doc) | <1s | <2s |
+| **Key Algorithm** | TOC parsing | Entity extraction + Community detection | GMM clustering + Hierarchical summarization |
 
 ## References
 

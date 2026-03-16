@@ -1,19 +1,19 @@
-import pytest
-import sys
 from pathlib import Path
 
+import pytest
+
 # 确保导入 lib 模块来配置 Python path
-import lib
 
 
 def test_import_pageindex():
-    """验证可以导入 PageIndex 模块"""
+    """验证可以导入 PageIndex 模块."""
     try:
         # PDF 处理：page_index 函数
+        from pageindex import utils  # noqa: F401
         from pageindex.page_index import page_index
+
         # Markdown 处理：md_to_tree 函数（不是 page_index_md！）
         from pageindex.page_index_md import md_to_tree
-        from pageindex import utils
 
         assert callable(page_index), "page_index 应该是可调用函数"
         assert callable(md_to_tree), "md_to_tree 应该是可调用函数"
@@ -26,9 +26,8 @@ def test_import_pageindex():
 
 
 def test_load_config():
-    """验证可以加载配置"""
+    """验证可以加载配置."""
     import yaml
-    from pathlib import Path
 
     config_path = Path("config/pageindex_config.yaml")
     assert config_path.exists(), "配置文件不存在"

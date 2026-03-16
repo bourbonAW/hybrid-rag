@@ -1,0 +1,49 @@
+# Pre-commit hooks for hybrid-search-practice
+# 安装: uv add --dev pre-commit
+# 启用: uv run pre-commit install
+# 手动运行: uv run pre-commit run --all-files
+
+repos:
+  # Ruff: Python 代码格式化和 Lint (替代 black + flake8 + isort)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.0
+    hooks:
+      # 自动修复可修复的问题
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+      # 代码格式化
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  # MyPy: 静态类型检查
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - pydantic>=2.6.0
+          - pydantic-settings>=2.1.0
+          - types-pyyaml>=6.0.0
+          - types-aiofiles>=23.2.0
+        args: [--ignore-missing-imports, --show-error-codes]
+        types_or: [python, pyi]
+
+  # 通用文件检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # 检查文件末尾是否有空行
+      - id: end-of-file-fixer
+      # 修复文件末尾多余的空白字符
+      - id: trailing-whitespace
+      # 检查 YAML 语法
+      - id: check-yaml
+      # 检查 JSON 语法
+      - id: check-json
+      # 检查合并冲突标记
+      - id: check-merge-conflict
+      # 检查调试语句 (breakpoint, pdb 等)
+      - id: debug-statements
+      # 检查私有密钥
+      - id: detect-private-key

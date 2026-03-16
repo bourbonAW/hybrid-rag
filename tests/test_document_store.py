@@ -1,6 +1,7 @@
 import pytest
+
 from models.document_store import DocumentStore
-from models.schemas import Document, DocumentStatus
+from models.schemas import DocumentStatus
 
 
 @pytest.fixture

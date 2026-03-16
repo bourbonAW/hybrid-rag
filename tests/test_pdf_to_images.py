@@ -1,5 +1,6 @@
-import pytest
 from pathlib import Path
+
+import pytest
 from utils.pdf_to_images import extract_pdf_pages
 
 
@@ -7,6 +8,7 @@ from utils.pdf_to_images import extract_pdf_pages
 async def test_extract_pdf_pages(tmp_path):
     # Create a simple test PDF using pymupdf
     import fitz
+
     pdf_path = tmp_path / "test.pdf"
     doc = fitz.open()
     page = doc.new_page()

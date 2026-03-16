@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""
-LightRAG 集成验证脚本
+"""LightRAG 集成验证脚本.
 
 运行此脚本验证 LightRAG 集成是否正常工作。
 """
 
 import asyncio
-from pathlib import Path
 
 print("=" * 60)
 print("LightRAG Integration Verification")
@@ -18,6 +16,7 @@ try:
     from lib.lightrag import LightRAGWrapper
     from services.document_service import DocumentService
     from services.global_search_service import GlobalSearchService
+
     print("  ✓ All imports successful")
 except ImportError as e:
     print(f"  ✗ Import failed: {e}")
@@ -30,7 +29,7 @@ try:
     assert "llm" in wrapper.config
     assert "embedding" in wrapper.config
     assert "storage" in wrapper.config
-    print(f"  ✓ Configuration loaded")
+    print("  ✓ Configuration loaded")
     print(f"    - Working dir: {wrapper.working_dir}")
     print(f"    - LLM model: {wrapper.config['llm']['model']}")
     print(f"    - Default mode: {wrapper.config['retrieval']['default_mode']}")
@@ -58,15 +57,16 @@ try:
     """
     result = asyncio.run(wrapper.index_document("verify_test_doc", test_text))
     print(f"  ✓ Document indexed: {result['document_id']}")
-    
+
     # 测试搜索
     search_result = asyncio.run(wrapper.search("Who founded Apple?", mode="naive"))
     print(f"  ✓ Search completed (mode: {search_result['mode']})")
     print(f"    - Answer preview: {search_result['answer'][:100]}...")
-    
+
 except Exception as e:
     print(f"  ✗ Operation test failed: {e}")
     import traceback
+
     traceback.print_exc()
     # 不退出，继续清理
 

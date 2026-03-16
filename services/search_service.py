@@ -1,22 +1,21 @@
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any
+
 from models.schemas import SearchResponse, SearchResult
 from services.legacy.llm_client import LLMClient
 
 
 class SearchService:
-    def __init__(self, vlm: Optional[Any], llm: LLMClient):
+    """Document search service."""
+
+    def __init__(self, vlm: Any | None, llm: LLMClient):
+        """Initialize search service."""
         self.vlm = vlm  # 现在不使用，保留参数兼容性
         self.llm = llm
 
     async def search(
-        self,
-        query: str,
-        tree: Dict[str, Any],
-        doc_format: str,
-        storage_path: str,
-        top_k: int = 3
+        self, query: str, tree: dict[str, Any], doc_format: str, storage_path: str, top_k: int = 3
     ) -> SearchResponse:
         """Perform reasoning-based search."""
         start_time = time.time()
@@ -26,13 +25,9 @@ class SearchService:
 
         # Get results based on format
         if doc_format == "pdf":
-            results = await self._get_pdf_results(
-                query, search_result, tree, storage_path, top_k
-            )
+            results = await self._get_pdf_results(query, search_result, tree, storage_path, top_k)
         else:
-            results = await self._get_text_results(
-                query, search_result, tree, storage_path, top_k
-            )
+            results = await self._get_text_results(query, search_result, tree, storage_path, top_k)
 
         processing_time = (time.time() - start_time) * 1000
 
@@ -40,17 +35,12 @@ class SearchService:
             query=query,
             results=results,
             total_nodes=len(results),
-            processing_time_ms=processing_time
+            processing_time_ms=processing_time,
         )
 
     async def _get_pdf_results(
-        self,
-        query: str,
-        search_result: Dict,
-        tree: Dict,
-        storage_path: str,
-        top_k: int
-    ) -> List[SearchResult]:
+        self, query: str, search_result: dict, tree: dict, storage_path: str, top_k: int
+    ) -> list[SearchResult]:
         """Get results for PDF (using text content from PageIndex)."""
         node_list = search_result.get("node_list", [])[:top_k]
         thinking = search_result.get("thinking", "")
@@ -78,25 +68,22 @@ class SearchService:
             page_start = node.get("start_index") or node.get("page_start", 1)
             page_end = node.get("end_index") or node.get("page_end", page_start)
 
-            results.append(SearchResult(
-                node_id=node_id,
-                title=node["title"],
-                content=answer,
-                relevance_score=1.0,
-                page_refs=list(range(page_start, page_end + 1)),
-                reasoning_path=[thinking]
-            ))
+            results.append(
+                SearchResult(
+                    node_id=node_id,
+                    title=node["title"],
+                    content=answer,
+                    relevance_score=1.0,
+                    page_refs=list(range(page_start, page_end + 1)),
+                    reasoning_path=[thinking],
+                )
+            )
 
         return results
 
     async def _get_text_results(
-        self,
-        query: str,
-        search_result: Dict,
-        tree: Dict,
-        storage_path: str,
-        top_k: int
-    ) -> List[SearchResult]:
+        self, query: str, search_result: dict, tree: dict, storage_path: str, top_k: int
+    ) -> list[SearchResult]:
         """Get results for text documents."""
         node_list = search_result.get("node_list", [])[:top_k]
         thinking = search_result.get("thinking", "")
@@ -108,7 +95,7 @@ class SearchService:
         content_path = Path(storage_path) / "content.txt"
         full_content = ""
         if content_path.exists():
-            with open(content_path, "r") as f:
+            with open(content_path) as f:
                 full_content = f.read()
 
         for node_id in node_list:
@@ -120,18 +107,20 @@ class SearchService:
             context = node.get("content", "") or full_content[:2000]
             answer = await self.llm.answer_with_text(query, context)
 
-            results.append(SearchResult(
-                node_id=node_id,
-                title=node["title"],
-                content=answer,
-                relevance_score=1.0,
-                page_refs=[node.get("page_start", 1)],
-                reasoning_path=[thinking]
-            ))
+            results.append(
+                SearchResult(
+                    node_id=node_id,
+                    title=node["title"],
+                    content=answer,
+                    relevance_score=1.0,
+                    page_refs=[node.get("page_start", 1)],
+                    reasoning_path=[thinking],
+                )
+            )
 
         return results
 
-    def _build_node_map(self, nodes: List[Dict], prefix: str = "") -> Dict[str, Dict]:
+    def _build_node_map(self, nodes: list[dict], prefix: str = "") -> dict[str, dict]:
         """Flatten tree to node_id -> node mapping."""
         result = {}
         for node in nodes:

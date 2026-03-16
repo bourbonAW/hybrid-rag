@@ -1,11 +1,12 @@
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from services.llm_client import LLMClient
 
 
 @pytest.mark.asyncio
 async def test_build_tree_from_markdown():
-    with patch('services.llm_client.AsyncOpenAI') as mock_client_class:
+    with patch("services.llm_client.AsyncOpenAI") as mock_client_class:
         mock_client = AsyncMock()
         mock_response = AsyncMock()
         mock_response.choices = [AsyncMock(message=AsyncMock(content='{"nodes": []}'))]
@@ -21,7 +22,7 @@ async def test_build_tree_from_markdown():
 
 @pytest.mark.asyncio
 async def test_search_tree_text():
-    with patch('services.llm_client.AsyncOpenAI') as mock_client_class:
+    with patch("services.llm_client.AsyncOpenAI") as mock_client_class:
         mock_client = AsyncMock()
         mock_response = AsyncMock()
         mock_response.choices = [AsyncMock(message=AsyncMock(content='{"node_list": ["0001"]}'))]

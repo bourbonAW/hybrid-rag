@@ -1,7 +1,7 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-import asyncio
 from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock, MagicMock
 
 
 @pytest.mark.integration
@@ -13,28 +13,30 @@ class TestIntegration:
         # Import main module first
         import main
 
-        with patch('services.vlm_client.VLMClient') as mock_vlm, \
-             patch('services.llm_client.LLMClient') as mock_llm:
-
+        with (
+            patch("services.vlm_client.VLMClient") as mock_vlm,
+            patch("services.llm_client.LLMClient") as mock_llm,
+        ):
             # Setup VLM mock
             mock_vlm_instance = MagicMock()
-            mock_vlm_instance.build_tree_from_images = AsyncMock(return_value={
-                "nodes": [
-                    {
-                        "id": "0001",
-                        "level": 0,
-                        "title": "Test Document",
-                        "content": "Test content",
-                        "page_start": 1,
-                        "page_end": 1,
-                        "children": []
-                    }
-                ]
-            })
-            mock_vlm_instance.search_tree = AsyncMock(return_value={
-                "thinking": "Found relevant node",
-                "node_list": ["0001"]
-            })
+            mock_vlm_instance.build_tree_from_images = AsyncMock(
+                return_value={
+                    "nodes": [
+                        {
+                            "id": "0001",
+                            "level": 0,
+                            "title": "Test Document",
+                            "content": "Test content",
+                            "page_start": 1,
+                            "page_end": 1,
+                            "children": [],
+                        }
+                    ]
+                }
+            )
+            mock_vlm_instance.search_tree = AsyncMock(
+                return_value={"thinking": "Found relevant node", "node_list": ["0001"]}
+            )
             mock_vlm_instance.answer_with_images = AsyncMock(return_value="Test answer")
             mock_vlm.return_value = mock_vlm_instance
 
@@ -43,10 +45,10 @@ class TestIntegration:
             mock_llm.return_value = mock_llm_instance
 
             # Initialize global services in main module
+            from config import settings
             from models.document_store import DocumentStore
             from services.document_service import DocumentService
             from services.search_service import SearchService
-            from config import settings
 
             settings.storage_path.mkdir(parents=True, exist_ok=True)
             main.doc_store = DocumentStore()
@@ -54,6 +56,7 @@ class TestIntegration:
             main.search_service = SearchService(mock_vlm_instance, mock_llm_instance)
 
             from main import app
+
             return TestClient(app)
 
     def test_full_pdf_flow(self, client, tmp_path):
@@ -71,8 +74,7 @@ class TestIntegration:
         # Upload
         with open(pdf_path, "rb") as f:
             response = client.post(
-                "/api/v1/documents/upload",
-                files={"file": ("test.pdf", f, "application/pdf")}
+                "/api/v1/documents/upload", files={"file": ("test.pdf", f, "application/pdf")}
             )
         assert response.status_code == 202
         doc_id = response.json()["document_id"]

@@ -1,21 +1,24 @@
-"""
-PageIndex 包装层
+"""PageIndex 包装层.
 
 根据实际 API 探索结果实现的包装层。
 参考文档：docs/pageindex_api_exploration.md
 """
-import yaml
+
 import asyncio
-from pathlib import Path
-from typing import Dict, Any
 from functools import partial
+from pathlib import Path
+from typing import Any
+
+import yaml
+
 from config import settings
 
 
 class PageIndexWrapper:
-    """PageIndex 核心函数的包装层"""
+    """PageIndex 核心函数的包装层."""
 
     def __init__(self):
+        """Initialize PageIndex wrapper."""
         # 加载 PageIndex 配置
         config_path = Path("config/pageindex_config.yaml")
         with open(config_path) as f:
@@ -27,13 +30,8 @@ class PageIndexWrapper:
         self.base_url = settings.openai_base_url
         self.model = self.config.get("model", settings.openai_model)
 
-    async def build_tree_from_pdf(
-        self,
-        pdf_path: str,
-        storage_dir: Path
-    ) -> Dict[str, Any]:
-        """
-        使用 PageIndex 处理 PDF
+    async def build_tree_from_pdf(self, pdf_path: str, storage_dir: Path) -> dict[str, Any]:
+        """使用 PageIndex 处理 PDF.
 
         Args:
             pdf_path: PDF 文件路径
@@ -59,20 +57,15 @@ class PageIndexWrapper:
                 if_add_node_id=self.config.get("if_add_node_id", "yes"),
                 if_add_node_summary=self.config.get("if_add_node_summary", "yes"),
                 if_add_doc_description=self.config.get("if_add_doc_description", "yes"),
-                if_add_node_text=self.config.get("if_add_node_text", "no")
-            )
+                if_add_node_text=self.config.get("if_add_node_text", "no"),
+            ),
         )
 
         # 转换为我们的 API 格式
         return self._normalize_result(result)
 
-    async def build_tree_from_markdown(
-        self,
-        md_path: str,
-        storage_dir: Path
-    ) -> Dict[str, Any]:
-        """
-        使用 PageIndex 处理 Markdown
+    async def build_tree_from_markdown(self, md_path: str, storage_dir: Path) -> dict[str, Any]:
+        """使用 PageIndex 处理 Markdown.
 
         Args:
             md_path: Markdown 文件路径
@@ -93,15 +86,14 @@ class PageIndexWrapper:
             model=self.model,
             if_add_doc_description=self.config.get("if_add_doc_description", "yes"),
             if_add_node_text=self.config.get("if_add_node_text", "no"),
-            if_add_node_id=self.config.get("if_add_node_id", "yes")
+            if_add_node_id=self.config.get("if_add_node_id", "yes"),
         )
 
         # 转换为我们的 API 格式
         return self._normalize_result(result)
 
-    def _normalize_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        将 PageIndex 输出转换为我们的标准格式
+    def _normalize_result(self, result: dict[str, Any]) -> dict[str, Any]:
+        """将 PageIndex 输出转换为我们的标准格式.
 
         PageIndex 输出格式：
         {
@@ -119,12 +111,12 @@ class PageIndexWrapper:
         """
         # PageIndex 返回的 structure 就是节点列表，只需要重命名键
         normalized = {
-            'doc_name': result.get('doc_name', 'unknown'),
-            'nodes': result.get('structure', [])
+            "doc_name": result.get("doc_name", "unknown"),
+            "nodes": result.get("structure", []),
         }
 
         # 如果有文档描述，也包含进来
-        if 'doc_description' in result:
-            normalized['doc_description'] = result['doc_description']
+        if "doc_description" in result:
+            normalized["doc_description"] = result["doc_description"]
 
         return normalized

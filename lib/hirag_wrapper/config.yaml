@@ -1,0 +1,41 @@
+# lib/hirag_wrapper/config.yaml
+# HiRAG 模块默认配置
+# 注意：这些配置直接对应 HiRAG 的官方参数
+
+# 功能开关
+enabled: true
+
+# LLM 配置（复用项目现有 LLM 配置）
+llm:
+  model: "gpt-4o-mini"           # 与项目主配置一致
+  max_async_calls: 4
+  max_tokens: 4000
+  temperature: 0.0
+
+# 嵌入配置
+embedding:
+  model: "text-embedding-3-large"
+  dimensions: 3072
+  max_token_size: 8192
+
+# 层次化索引配置（HiRAG 特有）
+indexing:
+  enable_hierarchical: true      # 启用层次化索引（核心特性）
+  embedding_batch_num: 6         # 嵌入批处理数量
+  embedding_func_max_async: 8    # 最大异步嵌入调用数
+  enable_naive_rag: true         # 启用基础 RAG 作为备选
+
+# 存储配置
+storage:
+  working_dir: "./storage/hirag"
+
+# 模块元数据
+module:
+  name: "hirag"
+  version: "0.1.0"
+  source: "git-submodule"        # 标识来源：git-submodule
+
+# 检索配置（HiRAG 特有）
+retrieval:
+  default_mode: "hi"             # hi/naive/hi_nobridge/hi_local/hi_global/hi_bridge
+  top_k: 60

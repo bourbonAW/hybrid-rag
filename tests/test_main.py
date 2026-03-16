@@ -1,6 +1,8 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock, AsyncMock
+
 from models.schemas import DocumentStatus
 
 
@@ -11,21 +13,22 @@ def client():
 
     # Create mock instances
     mock_store_instance = MagicMock()
-    mock_store_instance.create = AsyncMock(return_value=MagicMock(
-        id="test-id",
-        filename="test.pdf",
-        format="pdf",
-        status=DocumentStatus.PENDING
-    ))
-    mock_store_instance.get = AsyncMock(return_value=MagicMock(
-        id="test-id",
-        filename="test.pdf",
-        format="pdf",
-        status=DocumentStatus.COMPLETED,
-        created_at=MagicMock(isoformat=lambda: "2025-01-01T00:00:00"),
-        completed_at=MagicMock(isoformat=lambda: "2025-01-01T00:01:00"),
-        error_message=None
-    ))
+    mock_store_instance.create = AsyncMock(
+        return_value=MagicMock(
+            id="test-id", filename="test.pdf", format="pdf", status=DocumentStatus.PENDING
+        )
+    )
+    mock_store_instance.get = AsyncMock(
+        return_value=MagicMock(
+            id="test-id",
+            filename="test.pdf",
+            format="pdf",
+            status=DocumentStatus.COMPLETED,
+            created_at=MagicMock(isoformat=lambda: "2025-01-01T00:00:00"),
+            completed_at=MagicMock(isoformat=lambda: "2025-01-01T00:01:00"),
+            error_message=None,
+        )
+    )
 
     # Replace global variables in main module
     main.doc_store = mock_store_instance
@@ -33,13 +36,14 @@ def client():
     main.search_service = MagicMock()
 
     from main import app
+
     return TestClient(app)
 
 
 def test_upload_document(client):
     response = client.post(
         "/api/v1/documents/upload",
-        files={"file": ("test.pdf", b"fake pdf content", "application/pdf")}
+        files={"file": ("test.pdf", b"fake pdf content", "application/pdf")},
     )
     assert response.status_code == 202
     assert "document_id" in response.json()

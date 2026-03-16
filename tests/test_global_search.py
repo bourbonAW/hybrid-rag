@@ -1,7 +1,9 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from services.global_search_service import GlobalSearchService, GlobalSearchResult
+
 from models.schemas import DocumentStatus
+from services.global_search_service import GlobalSearchResult, GlobalSearchService
 
 
 @pytest.fixture
@@ -13,16 +15,10 @@ def mock_services():
 
     # Mock document store with completed documents
     doc1 = MagicMock(
-        id="doc-1",
-        filename="financial_report.pdf",
-        format="pdf",
-        status=DocumentStatus.COMPLETED
+        id="doc-1", filename="financial_report.pdf", format="pdf", status=DocumentStatus.COMPLETED
     )
     doc2 = MagicMock(
-        id="doc-2",
-        filename="technical_manual.pdf",
-        format="pdf",
-        status=DocumentStatus.COMPLETED
+        id="doc-2", filename="technical_manual.pdf", format="pdf", status=DocumentStatus.COMPLETED
     )
 
     # Mock the async list_completed_documents method
@@ -36,7 +32,7 @@ def mock_services():
                 "title": "Introduction",
                 "content": "This is a test document",
                 "page_start": 1,
-                "page_end": 1
+                "page_end": 1,
             }
         ]
     }
@@ -46,7 +42,7 @@ def mock_services():
 
 @pytest.mark.asyncio
 async def test_global_search_no_documents(mock_services):
-    """测试没有文档时的情况"""
+    """测试没有文档时的情况."""
     doc_store, doc_service, search_service, llm = mock_services
     doc_store.list_completed_documents = AsyncMock(return_value=[])
 
@@ -60,30 +56,40 @@ async def test_global_search_no_documents(mock_services):
 
 @pytest.mark.asyncio
 async def test_global_search_document_selection(mock_services):
-    """测试文档选择阶段"""
+    """测试文档选择阶段."""
     doc_store, doc_service, search_service, llm = mock_services
 
     # Mock LLM document selection response
-    llm.client.chat.completions.create = AsyncMock(return_value=MagicMock(
-        choices=[MagicMock(
-            message=MagicMock(
-                content='{"thinking": "Analysis", "selected_documents": [{"doc_id": "doc-1", "relevance_score": 0.9, "reasoning": "Most relevant"}]}'
-            )
-        )]
-    ))
+    llm.client.chat.completions.create = AsyncMock(
+        return_value=MagicMock(
+            choices=[
+                MagicMock(
+                    message=MagicMock(
+                        content=(
+                            '{"thinking": "Analysis", "selected_documents": '
+                            '[{"doc_id": "doc-1", "relevance_score": 0.9, '
+                            '"reasoning": "Most relevant"}]}'
+                        )
+                    )
+                )
+            ]
+        )
+    )
 
     # Mock search service response
-    search_service.search = AsyncMock(return_value=MagicMock(
-        results=[
-            MagicMock(
-                node_id="0001",
-                title="Test Section",
-                content="Test content",
-                page_refs=[1],
-                reasoning_path=["reasoning"]
-            )
-        ]
-    ))
+    search_service.search = AsyncMock(
+        return_value=MagicMock(
+            results=[
+                MagicMock(
+                    node_id="0001",
+                    title="Test Section",
+                    content="Test content",
+                    page_refs=[1],
+                    reasoning_path=["reasoning"],
+                )
+            ]
+        )
+    )
 
     service = GlobalSearchService(doc_store, doc_service, search_service, llm)
     result = await service.search("test query", top_k_documents=1)
@@ -94,7 +100,7 @@ async def test_global_search_document_selection(mock_services):
 
 @pytest.mark.asyncio
 async def test_global_search_answer_synthesis(mock_services):
-    """测试答案聚合阶段"""
+    """测试答案聚合阶段."""
     doc_store, doc_service, search_service, llm = mock_services
 
     call_count = [0]
@@ -104,35 +110,45 @@ async def test_global_search_answer_synthesis(mock_services):
         if call_count[0] == 1:
             # First call: document selection
             return MagicMock(
-                choices=[MagicMock(
-                    message=MagicMock(
-                        content='{"thinking": "test", "selected_documents": [{"doc_id": "doc-1", "relevance_score": 0.9, "reasoning": "relevant"}]}'
+                choices=[
+                    MagicMock(
+                        message=MagicMock(
+                            content=(
+                                '{"thinking": "test", "selected_documents": '
+                                '[{"doc_id": "doc-1", "relevance_score": 0.9, '
+                                '"reasoning": "relevant"}]}'
+                            )
+                        )
                     )
-                )]
+                ]
             )
         else:
             # Second call: answer synthesis
             return MagicMock(
-                choices=[MagicMock(
-                    message=MagicMock(
-                        content="This is the synthesized answer from multiple documents."
+                choices=[
+                    MagicMock(
+                        message=MagicMock(
+                            content="This is the synthesized answer from multiple documents."
+                        )
                     )
-                )]
+                ]
             )
 
     llm.client.chat.completions.create = AsyncMock(side_effect=mock_create)
 
-    search_service.search = AsyncMock(return_value=MagicMock(
-        results=[
-            MagicMock(
-                node_id="0001",
-                title="Section",
-                content="Content",
-                page_refs=[1],
-                reasoning_path=["reasoning"]
-            )
-        ]
-    ))
+    search_service.search = AsyncMock(
+        return_value=MagicMock(
+            results=[
+                MagicMock(
+                    node_id="0001",
+                    title="Section",
+                    content="Content",
+                    page_refs=[1],
+                    reasoning_path=["reasoning"],
+                )
+            ]
+        )
+    )
 
     service = GlobalSearchService(doc_store, doc_service, search_service, llm)
     result = await service.search("test query")
@@ -143,43 +159,43 @@ async def test_global_search_answer_synthesis(mock_services):
 
 @pytest.mark.asyncio
 async def test_global_search_api_endpoint():
-    """测试 API 端点集成"""
+    """测试 API 端点集成."""
     from fastapi.testclient import TestClient
+
     import main
 
     # Mock all services
     mock_doc_store = MagicMock()
-    mock_doc_store.list_completed_documents = AsyncMock(return_value=[
-        MagicMock(
-            id="doc-1",
-            filename="test.pdf",
-            format="pdf",
-            status=DocumentStatus.COMPLETED
-        )
-    ])
+    mock_doc_store.list_completed_documents = AsyncMock(
+        return_value=[
+            MagicMock(
+                id="doc-1", filename="test.pdf", format="pdf", status=DocumentStatus.COMPLETED
+            )
+        ]
+    )
 
     mock_global_search = MagicMock()
-    mock_global_search.search = AsyncMock(return_value=MagicMock(
-        to_dict=lambda: {
-            "query": "test query",
-            "final_answer": "Test answer",
-            "sources": [],
-            "document_selection_reasoning": "Test reasoning",
-            "total_documents_searched": 1,
-            "processing_time_ms": 100.0
-        }
-    ))
+    mock_global_search.search = AsyncMock(
+        return_value=MagicMock(
+            to_dict=lambda: {
+                "query": "test query",
+                "final_answer": "Test answer",
+                "sources": [],
+                "document_selection_reasoning": "Test reasoning",
+                "total_documents_searched": 1,
+                "processing_time_ms": 100.0,
+            }
+        )
+    )
 
     main.doc_store = mock_doc_store
     main.global_search_service = mock_global_search
 
     from main import app
+
     client = TestClient(app)
 
-    response = client.post(
-        "/api/v1/search",
-        json={"query": "test query", "top_k_documents": 3}
-    )
+    response = client.post("/api/v1/search", json={"query": "test query", "top_k_documents": 3})
 
     assert response.status_code == 200
     data = response.json()
