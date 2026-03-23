@@ -59,7 +59,16 @@ def calculate_content_hash(content: bytes) -> str:
 
 
 class DocumentService:
-    """Document processing service."""
+    """文档处理服务 — 并行构建多策略索引.
+
+    文档上传后并行执行 4 种分块/索引策略（对应 Weaviate 文章的策略编号）：
+    - PageIndex: S3 + S5 + S8 (文档结构 + LLM + 层次化分块)
+    - LightRAG: S4 (语义分块，知识图谱驱动)
+    - HiRAG: S8 (层次化分块，GMM 聚类)
+    - Hybrid Search: S1 + S2 (固定大小 + 递归分块)
+
+    策略详情：docs/chunking_strategy_mapping.md
+    """
 
     def __init__(
         self,

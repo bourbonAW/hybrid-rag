@@ -1,4 +1,12 @@
-"""PageIndex 包装层.
+"""PageIndex 包装层 — 文档结构分块 (S3) + LLM 分块 (S5) + 层次化分块 (S8).
+
+本模块对应 Weaviate 文章中 3 种分块策略的融合实现：
+- S3 Document-Based Chunking: 按 PDF 页面布局 / Markdown 标题层级切分
+- S5 LLM-Based Chunking: VLM/LLM 直接分析文档结构生成树节点
+- S8 Hierarchical Chunking: 输出多层级树结构，支持渐进式检索
+
+适用场景：长文档深度分析、单文档精读、结构化报告
+策略详情：docs/chunking_strategy_mapping.md#31-pageindex
 
 根据实际 API 探索结果实现的包装层。
 参考文档：docs/pageindex_api_exploration.md
@@ -31,7 +39,10 @@ class PageIndexWrapper:
         self.model = self.config.get("model", settings.openai_model)
 
     async def build_tree_from_pdf(self, pdf_path: str, storage_dir: Path) -> dict[str, Any]:
-        """使用 PageIndex 处理 PDF.
+        """使用 PageIndex 处理 PDF — S3 文档结构分块 + S5 LLM 分块.
+
+        VLM 分析 PDF 页面图像，识别文档结构（目录、标题、段落），
+        生成层次化树索引。这是文章中 S5 LLM-Based Chunking 的视觉模态实现。
 
         Args:
             pdf_path: PDF 文件路径
@@ -65,7 +76,11 @@ class PageIndexWrapper:
         return self._normalize_result(result)
 
     async def build_tree_from_markdown(self, md_path: str, storage_dir: Path) -> dict[str, Any]:
-        """使用 PageIndex 处理 Markdown.
+        """使用 PageIndex 处理 Markdown — S3 文档结构分块 + S8 层次化分块.
+
+        按 Markdown 标题层级（#, ##, ###）构建多层树结构。
+        这是文章中 S3 Document-Based Chunking 最直接的实现——
+        Markdown 的标题就是天然的语义边界。
 
         Args:
             md_path: Markdown 文件路径

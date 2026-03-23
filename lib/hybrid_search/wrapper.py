@@ -1,4 +1,17 @@
-"""Hybrid Search 包装层 - 基于 Qdrant 实现 BM25 + Vector Hybrid Search."""
+"""Hybrid Search 包装层 — 固定大小分块 (S1) + 递归分块 (S2) + BM25/Vector 双通道检索.
+
+对应 Weaviate 文章中最基础的两种分块策略的工程组合：
+- S1 Fixed-Size Chunking: chunk_size=512, overlap=50，文章建议的 baseline 参数
+- S2 Recursive Chunking: separators 按段落→行→句→词优先级递归切分
+
+在分块基础上叠加 BM25 精确匹配 + Dense Vector 语义匹配 + RRF 融合，
+填补其他 LLM 驱动策略在精确关键词匹配上的盲区。
+
+适用场景：代码片段查找、精确术语检索、ID/编号匹配
+策略详情：docs/chunking_strategy_mapping.md#34-hybrid-search
+
+基于 Qdrant 实现 BM25 + Vector Hybrid Search。
+"""
 
 from pathlib import Path
 from typing import Any

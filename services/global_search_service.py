@@ -88,7 +88,13 @@ class GlobalSearchResult:
 
 
 class GlobalSearchService:
-    """全局多文档搜索服务 - 支持 LightRAG 策略."""
+    """全局多文档搜索服务 — 智能体协调层 (S6 Agentic Chunking).
+
+    对应 Weaviate 文章中 S6 Agentic Chunking 在检索层的工程落地：
+    根据查询特征动态路由到最优检索策略（PageIndex/LightRAG/HiRAG/Hybrid Search）。
+
+    策略详情：docs/chunking_strategy_mapping.md#35-globalsearchservice
+    """
 
     def __init__(
         self,
@@ -245,14 +251,17 @@ class GlobalSearchService:
         return candidates
 
     def _select_strategy(self, query: str) -> str:
-        """自动选择最优策略.
+        """自动选择最优策略 — S6 Agentic Chunking 的核心路由逻辑.
 
-        启发式规则：
-        - 关键词导向查询（代码、ID、术语）→ hybrid_search (BM25+Vector)
-        - 短查询、事实性问题 → LightRAG (fast)
-        - 层次化、关系复杂查询 → HiRAG (hierarchical)
-        - 长查询、需要深度分析 → PageIndex (deep)
-        - 跨文档比较 → Hybrid
+        这是 Weaviate 文章中 S6 Agentic Chunking 在检索层的实现：
+        根据查询特征（而非文档特征）动态路由到最优的检索策略。
+
+        路由规则：
+        - 关键词导向查询（代码、ID、术语）→ Hybrid Search (S1+S2, BM25 精确匹配)
+        - 层次化、关系复杂查询 → HiRAG (S8, 层次化检索)
+        - 短查询、事实性问题 → LightRAG (S4, 图检索快速响应)
+        - 跨文档比较 → Hybrid (LightRAG+PageIndex 组合)
+        - 长查询、需要深度分析 → PageIndex (S3+S5, 树推理精读)
         """
         # 关键词导向查询 → Hybrid Search (BM25 精确匹配)
         if HYBRID_SEARCH_AVAILABLE and self.hybrid_search and self._is_keyword_query(query):

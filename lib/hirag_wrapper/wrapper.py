@@ -1,6 +1,16 @@
 # lib/hirag_wrapper/wrapper.py
 
-"""HiRAG 包装层 - 基于 HiRAG 官方库.
+"""HiRAG 包装层 — 层次化分块 (S8 Hierarchical Chunking).
+
+对应 Weaviate 文章中 S8 Hierarchical Chunking 的深度实现：
+与 PageIndex 基于文档显式结构（标题/目录）构建层次不同，
+HiRAG 通过 GMM 聚类自动发现内容中的隐含层次结构。
+
+三层检索（chunk → community → global）是 S8 多粒度检索能力的体现——
+在不同层级获取不同粒度的信息。
+
+适用场景：复杂关系分析、层次化知识检索、无明确标题结构的文档
+策略详情：docs/chunking_strategy_mapping.md#33-hirag
 
 职责：
 1. 适配 HiRAG API 到项目统一接口

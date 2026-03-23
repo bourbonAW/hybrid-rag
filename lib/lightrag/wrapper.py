@@ -1,6 +1,19 @@
 # lib/lightrag/wrapper.py
 
-"""LightRAG 包装层 - 基于 lightrag-hku 官方库.
+"""LightRAG 包装层 — 语义分块的图增强变体 (S4 Semantic Chunking).
+
+对应 Weaviate 文章中 S4 Semantic Chunking 的深度实现：
+标准 Semantic Chunking 基于 embedding 相似度找语义断点，
+LightRAG 更进一步——用 LLM 抽取实体和关系，构建知识图谱，
+以"实体-关系"为语义单元进行分块。
+
+与标准 Semantic Chunking 的区别：
+- 语义单元：实体节点 + 社区摘要（而非连续句子组）
+- 检索方式：图遍历 + 双层检索（而非向量相似度）
+- 成本优势：<100 tokens/query，适合多文档场景
+
+适用场景：快速事实检索、多文档概览、实体关系查询
+策略详情：docs/chunking_strategy_mapping.md#32-lightrag
 
 职责：
 1. 适配 lightrag-hku API 到项目统一接口

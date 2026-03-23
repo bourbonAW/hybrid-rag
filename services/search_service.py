@@ -7,7 +7,14 @@ from services.legacy.llm_client import LLMClient
 
 
 class SearchService:
-    """Document search service."""
+    """单文档搜索服务 — 基于 PageIndex 树结构的推理检索.
+
+    在 PageIndex 的层次化分块 (S8) 基础上执行 LLM 推理检索：
+    1. LLM 分析树结构，识别与查询相关的节点
+    2. 提取节点内容，生成答案
+
+    策略详情：docs/chunking_strategy_mapping.md#31-pageindex
+    """
 
     def __init__(self, vlm: Any | None, llm: LLMClient):
         """Initialize search service."""
