@@ -111,13 +111,12 @@ class HiRAGWrapper:
         if not OPENAI_AVAILABLE:
             raise ImportError("OpenAI is required for HiRAG")
 
-        # 加载配置 - 优先使用传入的路径，否则使用默认路径
+        # 加载配置 - 使用模块目录下的 config.yaml
         if config_path is None:
             config_path = Path(__file__).parent / "config.yaml"
 
-        # 如果模块目录没有，尝试项目根目录的 config/
         if not config_path.exists():
-            config_path = Path("config/hirag_config.yaml")
+            raise FileNotFoundError(f"HiRAG config not found: {config_path}")
 
         with open(config_path) as f:
             self.config = yaml.safe_load(f)
@@ -241,7 +240,8 @@ class HiRAGWrapper:
 
         # 使用 HiRAG 的 insert 方法索引文档
         # 注意：HiRAG 目前不直接支持 ids 参数，我们使用 doc_id 作为命名空间
-        self._rag.insert(text)
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._rag.insert, text)
 
         return {
             "document_id": document_id,
@@ -291,7 +291,7 @@ class HiRAGWrapper:
         param = QueryParam(mode=mode)
 
         # 执行查询（HiRAG 的 query 是同步的，在线程池中运行）
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, self._rag.query, query, param)
 
         return {
