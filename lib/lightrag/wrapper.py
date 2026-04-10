@@ -71,14 +71,12 @@ class LightRAGWrapper:
                 "lightrag-hku is not installed. Install it with: pip install lightrag-hku>=1.4.10"
             )
 
-        # 加载配置 - 优先使用传入的路径，否则使用默认路径
+        # 加载配置 - 使用模块目录下的 config.yaml
         if config_path is None:
-            # 默认配置位于模块目录下
             config_path = Path(__file__).parent / "config.yaml"
 
-        # 如果模块目录没有，尝试项目根目录的 config/
         if not config_path.exists():
-            config_path = Path("config/lightrag_config.yaml")
+            raise FileNotFoundError(f"LightRAG config not found: {config_path}")
 
         with open(config_path) as f:
             self.config = yaml.safe_load(f)

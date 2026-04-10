@@ -332,6 +332,11 @@ class HiRAGWrapper:
             "status": "initialized",
         }
 
+    async def delete_document(self, document_id: str) -> bool:
+        """Delete document from HiRAG index (best-effort, not natively supported)."""
+        print(f"[HiRAGWrapper] delete_document not natively supported: {document_id}")
+        return False
+
     async def close(self):
         """关闭资源."""
         self._rag = None

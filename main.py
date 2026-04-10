@@ -15,7 +15,7 @@ from models.schemas import (
 )
 from services.document_service import DocumentService, calculate_content_hash
 from services.global_search_service import GlobalSearchService
-from services.legacy.llm_client import LLMClient
+from services.llm_client import LLMClient
 from services.search_service import SearchService
 
 # Import LightRAG wrapper
@@ -300,18 +300,39 @@ async def search_document(doc_id: str, request: SearchRequest):
 
 @app.delete("/api/v1/documents/{doc_id}")
 async def delete_document(doc_id: str):
-    """Delete a document and its index."""
+    """Delete a document and its index from all backends."""
     doc = await doc_store.get(doc_id)
     if not doc:
         raise HTTPException(404, "Document not found")
 
-    # Delete from store
+    available = doc.available_indexes or []
+
+    # Delete from store (SQLite)
     await doc_store.delete(doc_id)
 
-    # Delete storage
+    # Delete file storage
     storage_dir = settings.storage_path / doc_id
     if storage_dir.exists():
         shutil.rmtree(storage_dir)
+
+    # Delete from backend indexes that were built for this document
+    if "lightrag" in available and lightrag_wrapper:
+        try:
+            await lightrag_wrapper.delete_document(doc_id)
+        except Exception as e:
+            print(f"[Delete] LightRAG cleanup failed for {doc_id}: {e}")
+
+    if "hirag" in available and hirag_wrapper:
+        try:
+            await hirag_wrapper.delete_document(doc_id)
+        except Exception as e:
+            print(f"[Delete] HiRAG cleanup failed for {doc_id}: {e}")
+
+    if "hybrid_search" in available and hybrid_search_wrapper:
+        try:
+            await hybrid_search_wrapper.delete_document(doc_id)
+        except Exception as e:
+            print(f"[Delete] HybridSearch cleanup failed for {doc_id}: {e}")
 
     return {"message": "Document deleted successfully"}
 
