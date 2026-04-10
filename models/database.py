@@ -8,45 +8,11 @@ from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime, Integer, String, create_engine
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 from models.schemas import DocumentStatus
 
 Base = declarative_base()
-
-
-class JSONEncodedDict:
-    """SQLAlchemy 类型装饰器用于 JSON 字段."""
-
-    impl = String
-
-    def process_bind_param(self, value, dialect):
-        """Convert Python value to database value.
-
-        Args:
-            value: Python value (list or dict)
-            dialect: SQL dialect
-
-        Returns:
-            JSON string for storage
-        """
-        if value is not None:
-            return json.dumps(value)
-        return None
-
-    def process_result_value(self, value, dialect):
-        """Convert database value to Python value.
-
-        Args:
-            value: JSON string from database
-            dialect: SQL dialect
-
-        Returns:
-            Python list or dict
-        """
-        if value is not None:
-            return json.loads(value)
-        return None
 
 
 class DocumentRecord(Base):
