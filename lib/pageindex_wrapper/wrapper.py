@@ -34,7 +34,7 @@ class PageIndexWrapper:
             "if_add_node_id": "yes",
             "if_add_node_summary": "yes",
             "if_add_doc_description": "yes",
-            "if_add_node_text": "no",
+            "if_add_node_text": "yes",
         }
 
         # 设置 API 配置（注意：这些不会传递给 PageIndex）
@@ -130,9 +130,19 @@ class PageIndexWrapper:
         }
         """
         # PageIndex 返回的 structure 就是节点列表，只需要重命名键
+        nodes = result.get("structure", [])
+
+        # PageIndex bug: root node's end_index only reflects its own title pages,
+        # not the full document span. Fix each top-level node's end_index to cover
+        # all descendants.
+        for node in nodes:
+            max_end = self._get_max_end_index(node)
+            if node.get("end_index", 0) < max_end:
+                node["end_index"] = max_end
+
         normalized = {
             "doc_name": result.get("doc_name", "unknown"),
-            "nodes": result.get("structure", []),
+            "nodes": nodes,
         }
 
         # 如果有文档描述，也包含进来
@@ -140,3 +150,10 @@ class PageIndexWrapper:
             normalized["doc_description"] = result["doc_description"]
 
         return normalized
+
+    def _get_max_end_index(self, node: dict[str, Any]) -> int:
+        """递归获取节点及其所有后代中最大的 end_index."""
+        max_idx = node.get("end_index", 0)
+        for child in node.get("nodes", []):
+            max_idx = max(max_idx, self._get_max_end_index(child))
+        return max_idx

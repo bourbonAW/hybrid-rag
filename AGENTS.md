@@ -1,22 +1,25 @@
 # AGENTS.md - AI Coding Agent Guide
 
-This file provides comprehensive guidance for AI coding agents working with the PageIndex API Service codebase.
+This file provides comprehensive guidance for AI coding agents working with the Hybrid RAG API Service codebase.
 
 ## Project Overview
 
-**PageIndex API Service** is a Format-Adaptive RAG (Retrieval-Augmented Generation) API that processes documents (PDF, DOCX, Markdown, TXT) into hierarchical tree indexes and enables semantic search with LLM-based reasoning.
+**Hybrid RAG API Service** is a Multi-Strategy RAG (Retrieval-Augmented Generation) API that processes documents (PDF, DOCX, Markdown, TXT) using 4 different indexing strategies and enables intelligent search with automatic strategy selection.
 
 **Core Value Proposition:**
-- Uses [PageIndex](https://github.com/VectifyAI/PageIndex) (a vectorless RAG system) instead of traditional embedding-based retrieval
-- Achieves 98.7% accuracy on FinanceBench benchmark through reasoning-based document understanding
-- Supports both single-document and multi-document (global) search workflows
+- **Multi-Strategy Retrieval**: PageIndex (TOC-tree) + LightRAG (entity graph) + HiRAG (hierarchical) + Hybrid Search (BM25+Vector)
+- **Automatic Strategy Selection**: Routes queries to optimal retrieval strategy based on query characteristics
+- **Format-Adaptive**: Supports PDF, DOCX, Markdown, TXT with format-specific optimization
+- **High Accuracy**: Combines multiple retrieval approaches for comprehensive coverage
 
 **Architecture Pattern:**
 ```
-Document Upload → Format Detection → Background Processing → Tree Index → Semantic Search
+Document Upload → Format Detection → Parallel Multi-Index Building → Unified Search API
                                     ↓
-                    PDF: Vision Model (VLM) analyzes page images
-                    Text: LLM parses markdown structure
+                    PageIndex: TOC-tree structure (S3+S5+S8)
+                    LightRAG: Entity graph (S4)
+                    HiRAG: Hierarchical knowledge graph (S8)
+                    Hybrid Search: BM25 + Dense Vector (S1+S2)
 ```
 
 ## Technology Stack
@@ -27,8 +30,11 @@ Document Upload → Format Detection → Background Processing → Tree Index �
 | Web Framework | FastAPI (async) |
 | Package Manager | uv |
 | Document Processing | PageIndex (git submodule) |
+| Vector Database | Qdrant (embedded) |
+| Graph Storage | NetworkX |
 | Database | SQLAlchemy + SQLite |
-| LLM/VLM | OpenAI API |
+| LLM | OpenAI API |
+| Local Embedding | FastEmbed (BAAI/bge-small) |
 | Data Validation | Pydantic v2 |
 | Testing | pytest + pytest-asyncio |
 
@@ -36,35 +42,48 @@ Document Upload → Format Detection → Background Processing → Tree Index �
 
 ```
 pageIndexPractice/
-├── lib/
-│   ├── __init__.py              # Configures Python path for PageIndex
-│   └── pageindex/               # Git submodule (PageIndex core library)
-│       ├── pageindex/
-│       │   ├── page_index.py    # PDF processing (page_index function)
-│       │   └── page_index_md.py # Markdown processing (md_to_tree function)
-│       └── ...
+├── lib/                         # Third-party library wrappers
+│   ├── __init__.py              # Configures Python path for submodules
+│   ├── pageindex/               # Git submodule (PageIndex core library)
+│   │   ├── pageindex/
+│   │   │   ├── page_index.py    # PDF processing (page_index function)
+│   │   │   └── page_index_md.py # Markdown processing (md_to_tree function)
+│   │   └── ...
+│   ├── pageindex_wrapper/       # PageIndex integration layer
+│   │   ├── __init__.py
+│   │   ├── wrapper.py           # Async wrappers for PageIndex
+│   │   └── config.yaml
+│   ├── lightrag/                # LightRAG wrapper (entity graph RAG)
+│   │   ├── __init__.py
+│   │   ├── wrapper.py
+│   │   └── config.yaml
+│   ├── hirag_wrapper/           # HiRAG wrapper (hierarchical RAG)
+│   │   ├── __init__.py
+│   │   ├── wrapper.py
+│   │   └── config.yaml
+│   └── hybrid_search/           # Hybrid Search wrapper (BM25 + Vector)
+│       ├── __init__.py
+│       └── wrapper.py
 ├── services/
 │   ├── __init__.py
-│   ├── pageindex_wrapper.py     # PageIndex integration layer (async wrappers)
-│   ├── document_service.py      # Document processing orchestrator
+│   ├── llm_client.py            # OpenAI LLM client for answer generation
+│   ├── document_service.py      # Document processing orchestrator (4-index parallel build)
 │   ├── search_service.py        # Single-document tree search
-│   ├── global_search_service.py # Multi-document search (3-phase pipeline)
-│   └── legacy/                  # Old implementations (backup/reference)
-│       ├── llm_client.py        # OpenAI LLM client
-│       └── vlm_client.py        # OpenAI Vision client (deprecated)
+│   └── global_search_service.py # Multi-document search with strategy selection
 ├── models/
 │   ├── __init__.py
 │   ├── schemas.py               # Pydantic models (Document, TreeNode, etc.)
-│   ├── database.py              # SQLAlchemy models and init
+│   ├── database.py              # SQLAlchemy models
 │   └── document_store.py        # Async document metadata storage
-├── config/
-│   └── pageindex_config.yaml    # PageIndex configuration
 ├── tests/                       # Test suite
 ├── docs/                        # Documentation
 ├── data/                        # SQLite database (gitignored)
 ├── storage/                     # Document files & indexes (gitignored)
+│   ├── lightrag/                # LightRAG working directory
+│   ├── hirag/                   # HiRAG working directory
+│   └── hybrid_search/           # Qdrant vector database
 ├── main.py                      # FastAPI application entry point
-├── config.py                    # Pydantic-settings configuration
+├── config.py                    # Pydantic-settings configuration (.env)
 └── pyproject.toml               # Project dependencies (uv)
 ```
 
@@ -107,16 +126,29 @@ uv run pytest -v -m "not integration"
 uv run pytest -v -m integration
 ```
 
+### Code Quality
+```bash
+# Format code
+uv run ruff check --fix .
+uv run ruff format .
+
+# Type check
+uv run mypy .
+
+# Run pre-commit hooks
+uv run pre-commit run --all-files
+```
+
 ### Submodule Management
 ```bash
-# Initialize submodule (required after fresh clone)
+# Initialize submodules (required after fresh clone)
 git submodule update --init --recursive
 
 # Update PageIndex to latest
 cd lib/pageindex && git pull origin main
 
-# Lock to specific version
-cd lib/pageindex && git checkout v1.2.3
+# Update HiRAG to latest
+cd lib/hirag && git pull origin main
 ```
 
 ## Configuration
@@ -133,60 +165,113 @@ STORAGE_PATH=./storage
 MAX_FILE_SIZE=104857600  # 100MB
 ```
 
-### PageIndex Configuration (config/pageindex_config.yaml)
+### Wrapper Configurations
+Each wrapper in `lib/` has its own `config.yaml`:
+
+**PageIndex** (`lib/pageindex_wrapper/config.yaml`):
 ```yaml
 model: "gpt-4o-2024-11-20"
-toc_check_page_num: 20              # Check first N pages for TOC
-max_page_num_each_node: 10          # Auto-split nodes exceeding this
-max_token_num_each_node: 20000      # Token threshold for subdivision
-if_add_node_id: "yes"               # Add node IDs like "0001", "0001.0001"
-if_add_node_summary: "yes"          # Generate node summaries
-if_add_doc_description: "yes"       # Generate doc descriptions (for global search)
-if_add_node_text: "no"              # Don't store full text in tree (too large)
+toc_check_page_num: 20
+max_page_num_each_node: 10
+max_token_num_each_node: 20000
+if_add_node_id: "yes"
+if_add_node_summary: "yes"
+if_add_doc_description: "yes"
+if_add_node_text: "no"
 ```
+
+**LightRAG** (`lib/lightrag/config.yaml`):
+- Embedding: text-embedding-3-large (3072 dims)
+- Chunk size: 1200 tokens
+- Working dir: `./storage/lightrag`
+
+**HiRAG** (`lib/hirag_wrapper/config.yaml`):
+- Embedding: text-embedding-3-large (3072 dims)
+- Hierarchical mode enabled
+- Working dir: `./storage/hirag`
+
+**Hybrid Search** (`lib/hybrid_search/config.yaml`):
+- Dense: BAAI/bge-small-en-v1.5 (384 dims, local)
+- Sparse: Qdrant/bm42-all-minilm-l6-v2-attentions (local)
+- Chunk size: 512 tokens
+- RRF fusion
 
 ## Code Organization & Module Responsibilities
 
-### Service Layer
+### lib/ - Third-Party Library Wrappers
 
-**PageIndexWrapper** (`services/pageindex_wrapper.py`)
-- Wraps PageIndex's sync/async functions for safe use in FastAPI async context
-- Handles `page_index()` (PDF) - runs in thread pool to avoid event loop conflicts
-- Handles `md_to_tree()` (Markdown) - native async
-- Normalizes output format from PageIndex to API format
+All wrappers provide consistent interface:
+- `__init__(config_path=None)` - Initialize with config
+- `async initialize()` - Async initialization (if needed)
+- `async index_document(doc_id, text, metadata)` - Build index
+- `async search(query, ...)` - Execute search
+- `async close()` - Cleanup resources
+
+**PageIndexWrapper** (`lib/pageindex_wrapper/`)
+- TOC-tree structure for hierarchical documents
+- Vision-based PDF processing
+- Markdown header parsing
+- Output: Tree structure with node IDs like "0001", "0001.0001"
+
+**LightRAGWrapper** (`lib/lightrag/`)
+- Entity graph construction
+- Community detection
+- Hybrid retrieval: local (entity) + global (community)
+- Best for: Fast factual retrieval, entity-centric queries
+
+**HiRAGWrapper** (`lib/hirag_wrapper/`)
+- Hierarchical knowledge graph (GMM clustering)
+- Multi-level communities (G0, G1, G2...)
+- Three-phase retrieval: local + global + bridge
+- Best for: Complex hierarchical queries
+
+**HybridSearchWrapper** (`lib/hybrid_search/`)
+- Dense: BAAI/bge-small-en-v1.5 (local, 384 dims)
+- Sparse: BM42 (local, learned BM25)
+- RRF fusion (Reciprocal Rank Fusion)
+- Best for: Keyword matching, exact phrases
+
+### services/ - Business Logic
+
+**LLMClient** (`services/llm_client.py`)
+- OpenAI API client for answer generation
+- Used by SearchService and GlobalSearchService
+- Not for embedding (wrappers use local models or OpenAI embedding)
 
 **DocumentService** (`services/document_service.py`)
-- Orchestrates document processing with format-specific strategies
-- Routes: PDF → `page_index()`, DOCX → convert to MD → `md_to_tree()`, MD/TXT → `md_to_tree()`
-- Manages storage lifecycle: `./storage/{doc_id}/` contains:
-  - `original.{ext}` - uploaded file
-  - `tree.json` - hierarchical index
-  - `pages/` - PDF page images (for PDF only)
+- Orchestrates parallel multi-index building
+- For each document, builds all 4 indexes concurrently
+- Tracks available/failed indexes per document
+- Routes: PDF → PageIndex, DOCX → MD → PageIndex, MD/TXT → PageIndex
+- Also triggers LightRAG, HiRAG, Hybrid Search indexing
 
 **SearchService** (`services/search_service.py`)
-- Performs LLM-based reasoning retrieval over single document tree indexes
-- Two-phase search: 1) LLM identifies relevant nodes, 2) LLM generates answers
-- Format-aware result retrieval (PDF vs text)
+- Single-document tree search (PageIndex only)
+- LLM-based node selection + answer generation
 
 **GlobalSearchService** (`services/global_search_service.py`) ⭐ Primary Interface
-- **Three-phase pipeline** for multi-document Q&A:
-  1. **Document Selection**: LLM analyzes all document summaries, ranks by relevance
-  2. **Parallel Retrieval**: Async retrieval from top-k documents simultaneously
-  3. **Answer Synthesis**: LLM aggregates multiple sources into coherent answer with citations
-- Automatically handles cross-document queries without manual document ID specification
+- **Strategy Selection**: Auto-routes queries based on characteristics
+  - Keyword queries → Hybrid Search
+  - Hierarchical queries → HiRAG
+  - Short factual → LightRAG
+  - Deep analytical → PageIndex
+- **Three-phase pipeline**:
+  1. Document Selection: LLM ranks documents by relevance
+  2. Parallel Retrieval: Execute chosen strategy on top-k docs
+  3. Answer Synthesis: LLM aggregates results with citations
 
-### Models & Schemas
+### models/ - Data Layer
 
 **Key Pydantic Models** (`models/schemas.py`):
-- `Document` - tracks upload metadata and processing status
+- `Document` - tracks upload metadata, processing status, available_indexes
 - `TreeNode` - hierarchical structure with id format like "0001", "0001.0001"
 - `SearchRequest`/`SearchResponse` - API request/response models
-- `GlobalSearchRequest`/`GlobalSearchResponse` - Multi-document search models
+- `GlobalSearchRequest`/`GlobalSearchResponse` - Multi-document search
 - `DocumentStatus` - enum (PENDING, PROCESSING, COMPLETED, FAILED)
 
 **DocumentStore** (`models/document_store.py`):
-- SQLite-backed persistent storage for document metadata
-- Survives service restarts
+- SQLite-backed persistent storage
+- Tracks: content_hash, available_indexes, failed_indexes
 - Async CRUD operations via SQLAlchemy
 
 ## API Endpoints
@@ -195,7 +280,25 @@ if_add_node_text: "no"              # Don't store full text in tree (too large)
 ```
 POST /api/v1/search
 ```
-Multi-document global search - automatically selects relevant documents and synthesizes answers.
+Multi-document global search with automatic strategy selection.
+
+Request:
+```json
+{
+  "query": "search query",
+  "strategy": "auto",
+  "top_k_documents": 3,
+  "top_k_results_per_doc": 2
+}
+```
+
+Strategies:
+- `auto` - Automatic selection (default)
+- `pageindex` - TOC-tree deep analysis
+- `lightrag` - Entity graph fast retrieval
+- `hirag` - Hierarchical knowledge retrieval
+- `hybrid_search` - BM25 + Vector semantic search
+- `hybrid` - LightRAG + PageIndex combined
 
 ### Document Management
 All endpoints prefixed with `/api/v1/documents/`:
@@ -203,10 +306,10 @@ All endpoints prefixed with `/api/v1/documents/`:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/upload` | POST | Upload document, returns `document_id`, starts background processing |
-| `/{doc_id}/status` | GET | Check processing status and metadata |
+| `/{doc_id}/status` | GET | Check processing status and available indexes |
 | `/{doc_id}/tree` | GET | Retrieve hierarchical tree structure (requires COMPLETED) |
 | `/{doc_id}/search` | POST | Search within specific document |
-| `/{doc_id}` | DELETE | Delete document and all associated storage |
+| `/{doc_id}` | DELETE | Delete document and all associated indexes |
 
 ### Health Check
 ```
@@ -217,7 +320,7 @@ GET /health
 
 ### Test Structure
 - **Unit tests**: Mocked dependencies, isolated component testing
-- **Integration tests**: Marked with `@pytest.mark.integration`, test full flows with mocked OpenAI API
+- **Integration tests**: Marked with `@pytest.mark.integration`, test full flows
 
 ### Important Testing Pattern
 When testing FastAPI endpoints, mock the global services in `main.py`:
@@ -233,7 +336,7 @@ Always mock `AsyncOpenAI` class at the module level:
 ```python
 from unittest.mock import patch, AsyncMock
 
-with patch('services.legacy.llm_client.AsyncOpenAI') as mock:
+with patch('services.llm_client.AsyncOpenAI') as mock:
     mock_instance = MagicMock()
     mock.return_value = mock_instance
 ```
@@ -248,34 +351,17 @@ with patch('services.legacy.llm_client.AsyncOpenAI') as mock:
 ### Patterns
 - **Async-first**: All I/O operations use `async`/`await`
 - **Type hints**: Use `typing` module (Dict, List, Optional, etc.)
-- **Pydantic v2**: Use `model_config = ConfigDict()` pattern, `model_rebuild()` for self-referencing models
+- **Pydantic v2**: Use `model_config = ConfigDict()` pattern
 - **Error handling**: Explicit try/except with meaningful error messages
 - **Path handling**: Use `pathlib.Path` instead of string paths
 
 ### Code Quality Tools
 
-项目使用以下工具保证代码质量（详见 `CODE_QUALITY.md`）：
-
 | 工具 | 用途 | 命令 |
 |------|------|------|
-| **Ruff** | Linter + Formatter | `make format` / `make lint` |
+| **Ruff** | Linter + Formatter | `uv run ruff check .` / `uv run ruff format .` |
 | **MyPy** | 类型检查 | `uv run mypy .` |
-| **Pre-commit** | Git hooks | `make dev` |
-
-**快速开始：**
-```bash
-# 安装开发依赖并启用 git hooks
-make dev
-
-# 提交前自动检查
-# (pre-commit hooks 会在 git commit 时自动运行)
-
-# 手动格式化代码
-make format
-
-# 手动代码检查
-make lint
-```
+| **Pre-commit** | Git hooks | `uv run pre-commit install` |
 
 ### Example Pattern
 ```python
@@ -297,29 +383,62 @@ TreeNode.model_rebuild()  # Required for self-referencing
 ### Document Processing Flow
 ```
 1. Upload → DocumentStore.create() returns doc_id
+   - Calculates content_hash for deduplication
+   - Checks for duplicate content
 2. File saved to ./storage/temp_{doc_id}_{filename}
 3. Background task → DocumentService.process_document()
-4. Format detection → route to _process_pdf() or _process_text()
-5. Tree structure saved to {doc_id}/tree.json
-6. Status updated: PENDING → PROCESSING → COMPLETED/FAILED
+4. Parallel index building:
+   - PageIndex: TOC-tree from PDF/Markdown
+   - LightRAG: Entity graph
+   - HiRAG: Hierarchical graph
+   - Hybrid Search: BM25 + Dense vectors
+5. Update document with available_indexes/failed_indexes
+6. Status: PENDING → PROCESSING → COMPLETED/FAILED
 ```
 
 ### Global Search Flow
 ```
-1. Phase 1: Document Selection
-   - Retrieve all COMPLETED documents with summaries
-   - LLM analyzes relevance and selects top-k documents
-   - Returns ranked candidates with reasoning
+1. Strategy Selection (if auto)
+   - Keyword indicators → hybrid_search
+   - Hierarchical keywords → hirag
+   - Short query → lightrag
+   - Default → hybrid
 
-2. Phase 2: Parallel Retrieval
-   - For each selected document: execute tree-based search
+2. Document Selection
+   - Retrieve all COMPLETED documents
+   - LLM analyzes summaries, ranks by relevance
+   - Returns top-k candidates
+
+3. Parallel Retrieval
+   - For each doc: execute selected strategy
+   - PageIndex: tree traversal
+   - LightRAG/HiRAG: graph search
+   - Hybrid Search: BM25+Vector RRF
    - Runs in parallel using asyncio.gather()
-   - Collects relevant sections from all documents
 
-3. Phase 3: Answer Synthesis
+4. Answer Synthesis
    - Aggregate content from multiple sources
    - LLM synthesizes comprehensive answer
-   - Includes source citations (document name + page refs)
+   - Includes source citations (doc name + page refs)
+```
+
+## Storage Architecture
+
+```
+storage/
+├── {doc_id}/                    # Per-document storage
+│   ├── original.{ext}          # Original uploaded file
+│   └── tree.json               # PageIndex tree structure
+├── lightrag/                   # LightRAG working directory
+│   ├── kv_store.json
+│   ├── vector_store.json
+│   └── graph.pkl
+├── hirag/                      # HiRAG working directory
+│   ├── graph.pkl
+│   └── entities.json
+└── hybrid_search/              # Qdrant vector database
+    └── qdrant_db/
+        └── storage.sqlite
 ```
 
 ## Security Considerations
@@ -328,6 +447,7 @@ TreeNode.model_rebuild()  # Required for self-referencing
 - **File Uploads**: Size limits enforced (`MAX_FILE_SIZE`, default 100MB)
 - **Path Traversal**: Document IDs are UUIDs, storage paths validated via Path joining
 - **SQL Injection**: SQLAlchemy ORM used throughout, no raw SQL
+- **Local Embedding**: FastEmbed models run locally, data never leaves machine
 
 ## Common Development Tasks
 
@@ -337,10 +457,12 @@ TreeNode.model_rebuild()  # Required for self-referencing
 3. Implement processing method in `DocumentService`
 4. Route in `process_document()` method
 
-### Modifying Tree Structure
-1. Update `TreeNode` model in `schemas.py`
-2. Update prompts in LLMClient to match new structure
-3. Update SearchService node parsing logic
+### Adding New RAG Backend
+1. Create `lib/new_wrapper/` directory
+2. Implement wrapper class with standard interface
+3. Add `config.yaml` for wrapper-specific settings
+4. Update `DocumentService` to call new indexer
+5. Update `GlobalSearchService` to include in strategy selection
 
 ### Adding New API Endpoint
 1. Add Pydantic models to `schemas.py` if needed
@@ -360,6 +482,7 @@ rm data/documents.db
 ```bash
 # Reinitialize submodule
 git submodule deinit -f lib/pageindex
+git submodule deinit -f lib/hirag
 git submodule update --init --recursive
 ```
 
@@ -367,11 +490,22 @@ git submodule update --init --recursive
 ```bash
 # Verify lib/__init__.py configures Python path
 python -c "import lib; from pageindex.page_index import page_index"
+python -c "import lib; from hirag import HiRAG"
+```
+
+### Clear All Data
+```bash
+# Remove all indexes and metadata
+rm -rf storage/*
+rm -f data/documents.db
 ```
 
 ## Related Documentation
 
 - [PageIndex Official Docs](https://docs.pageindex.ai/)
 - [PageIndex GitHub](https://github.com/VectifyAI/PageIndex)
+- [HiRAG GitHub](https://github.com/hhy-huang/HiRAG)
+- [LightRAG GitHub](https://github.com/HKUDS/LightRAG)
 - [API Exploration Report](docs/pageindex_api_exploration.md)
+- [Chunking Strategy Mapping](docs/chunking_strategy_mapping.md)
 - [CLAUDE.md](CLAUDE.md) - Additional Claude Code specific guidance

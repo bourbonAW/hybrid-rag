@@ -1,0 +1,15 @@
+# PageIndex wrapper 配置
+
+# LLM 配置
+model: "gpt-4o-2024-11-20"
+
+# 分块参数
+toc_check_page_num: 20
+max_page_num_each_node: 10
+max_token_num_each_node: 20000
+
+# 输出选项
+if_add_node_id: "yes"
+if_add_node_summary: "yes"
+if_add_doc_description: "yes"
+if_add_node_text: "no"

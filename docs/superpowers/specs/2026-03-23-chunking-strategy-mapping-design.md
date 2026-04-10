@@ -85,8 +85,8 @@ PageIndex 同时体现了文章中 3 种策略的融合：
 
 | 方法 | 文件 | 策略映射 |
 |------|------|---------|
-| `PageIndexWrapper.build_tree_from_pdf()` | `services/pageindex_wrapper.py` | S3 + S5 |
-| `PageIndexWrapper.build_tree_from_markdown()` | `services/pageindex_wrapper.py` | S3 + S8（结构来自标题语法，非 LLM 识别，故不计 S5；LLM 仅用于可选的摘要生成） |
+| `PageIndexWrapper.build_tree_from_pdf()` | `lib/pageindex_wrapper.py` | S3 + S5 |
+| `PageIndexWrapper.build_tree_from_markdown()` | `lib/pageindex_wrapper.py` | S3 + S8（结构来自标题语法，非 LLM 识别，故不计 S5；LLM 仅用于可选的摘要生成） |
 | `SearchService.search()` | `services/search_service.py` | 基于树的推理检索 |
 
 ---

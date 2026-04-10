@@ -119,6 +119,10 @@ class DocumentService:
             original_path = storage_dir / f"original.{file_format}"
             shutil.copy(file_path, original_path)
 
+            # Extract original filename from temp path "temp_{doc_id}_{filename}"
+            temp_name = Path(file_path).name
+            original_filename = temp_name[len(f"temp_{doc_id}_"):]
+
             # Delete temp upload file now that it has been copied
             temp = Path(file_path)
             if temp.exists() and temp.name.startswith("temp_"):
@@ -132,7 +136,7 @@ class DocumentService:
 
             if self.pageindex:
                 index_builders.append(
-                    ("pageindex", self._build_pageindex(doc_id, original_path, file_format, storage_dir))
+                    ("pageindex", self._build_pageindex(doc_id, original_path, file_format, storage_dir, original_filename))
                 )
 
             if self.lightrag and LIGHTRAG_AVAILABLE:
@@ -202,7 +206,8 @@ class DocumentService:
             raise ValueError(f"Unsupported format for text extraction: {file_format}")
 
     async def _build_pageindex(
-        self, doc_id: str, original_path: Path, file_format: str, storage_dir: Path
+        self, doc_id: str, original_path: Path, file_format: str, storage_dir: Path,
+        original_filename: str | None = None,
     ) -> dict:
         """构建 PageIndex 索引."""
         print(f"[DocumentService] Building PageIndex for {doc_id}")
@@ -232,6 +237,10 @@ class DocumentService:
                 )
         else:
             raise ValueError(f"Unsupported format: {file_format}")
+
+        # Fix doc_name to use the real uploaded filename instead of "original.<ext>"
+        if original_filename:
+            tree["doc_name"] = original_filename
 
         # Save tree to JSON
         tree_path = storage_dir / "tree.json"

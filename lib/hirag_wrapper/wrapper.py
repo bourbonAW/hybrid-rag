@@ -78,15 +78,6 @@ class EmbeddingFunc:
         return await self.func(*args, **kwargs)
 
 
-def wrap_embedding_func_with_attrs(**kwargs):
-    """Wrap a function with attributes."""
-
-    def final_decorator(func) -> EmbeddingFunc:
-        return EmbeddingFunc(**kwargs, func=func)
-
-    return final_decorator
-
-
 class HiRAGWrapper:
     """HiRAG 包装类.
 
@@ -140,10 +131,6 @@ class HiRAGWrapper:
             )
         return self._openai_client
 
-    @wrap_embedding_func_with_attrs(
-        embedding_dim=3072,  # text-embedding-3-large
-        max_token_size=8192,
-    )
     async def _embedding_func(self, texts: list[str]) -> np.ndarray:
         """Embedding 函数."""
         client = self._get_openai_client()

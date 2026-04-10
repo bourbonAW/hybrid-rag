@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from models.schemas import SearchResponse, SearchResult
-from services.legacy.llm_client import LLMClient
+from services.llm_client import LLMClient
 
 
 class SearchService:

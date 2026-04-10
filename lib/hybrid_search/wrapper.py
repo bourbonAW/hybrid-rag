@@ -30,7 +30,7 @@ class HybridSearchWrapper:
         """Initialize Hybrid Search wrapper."""
         # 延迟导入，避免在模块加载时出错
         from qdrant_client import AsyncQdrantClient, models
-        from qdrant_client.fastembed import SparseTextEmbedding, TextEmbedding
+        from qdrant_client.qdrant_fastembed import SparseTextEmbedding, TextEmbedding
 
         self._AsyncQdrantClient = AsyncQdrantClient
         self._models_module = models

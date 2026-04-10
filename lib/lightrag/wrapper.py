@@ -38,6 +38,7 @@ try:
     from lightrag import LightRAG, QueryParam
     from lightrag.llm.openai import openai_complete_if_cache, openai_embed
     from lightrag.utils import EmbeddingFunc
+    from lightrag.base import DocStatus
 
     LIGHTRAG_AVAILABLE = True
 except ImportError:
@@ -47,6 +48,7 @@ except ImportError:
     openai_complete_if_cache = None
     openai_embed = None
     EmbeddingFunc = None
+    DocStatus = None
 
 # 导入项目配置
 import sys
@@ -169,7 +171,13 @@ class LightRAGWrapper:
         # 注意：lightrag-hku 支持通过 ids 参数指定文档 ID
         await self._rag.ainsert(text, ids=[document_id])
 
-        # 返回统计信息（lightrag-hku 不直接提供，我们简单返回）
+        # ainsert() 内部捕获所有异常并标记文档为 FAILED，不向外抛出。
+        # 必须主动查询内部状态，否则会误报成功。
+        doc_status = await self._rag.doc_status.get_by_id(document_id)
+        if doc_status and doc_status.get("status") == DocStatus.FAILED:
+            error_msg = doc_status.get("error_msg", "unknown error")
+            raise RuntimeError(f"LightRAG indexing failed internally: {error_msg}")
+
         return {
             "document_id": document_id,
             "status": "completed",
