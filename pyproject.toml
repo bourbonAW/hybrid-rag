@@ -28,6 +28,10 @@ dependencies = [
     # Graph and ML dependencies (for LightRAG/HiRAG)
     "networkx>=3.0",
     "numpy>=1.24",
+    "umap-learn>=0.5.6",
+    "scikit-learn>=1.6.0",
+    "scipy>=1.12.0",
+    "neo4j>=5.25.0",
     # Semantic BM25 + Vector Search (Hybrid)
     "qdrant-client[fastembed]>=1.12.0",
 ]
@@ -50,6 +54,7 @@ markers = [
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
 
 # ==================== Ruff Configuration ====================
 # Ruff: 极速 Python linter 和 formatter

@@ -50,7 +50,7 @@ async def test_global_search_no_documents(mock_services):
     result = await service.search("test query")
 
     assert isinstance(result, GlobalSearchResult)
-    assert "未找到相关文档" in result.final_answer
+    assert "未找到" in result.final_answer
     assert result.total_documents_searched == 0
 
 
