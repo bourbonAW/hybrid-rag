@@ -18,6 +18,7 @@ def client():
             id="test-id", filename="test.pdf", format="pdf", status=DocumentStatus.PENDING
         )
     )
+    mock_store_instance.find_by_hash = AsyncMock(return_value=None)
     mock_store_instance.get = AsyncMock(
         return_value=MagicMock(
             id="test-id",

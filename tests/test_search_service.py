@@ -6,21 +6,28 @@ from services.search_service import SearchService
 
 
 @pytest.fixture
-def mock_clients():
+def mock_vlm():
     vlm = MagicMock()
-    llm = MagicMock()
-    return vlm, llm
-
-
-@pytest.mark.asyncio
-async def test_search_pdf(mock_clients):
-    vlm, llm = mock_clients
     vlm.search_tree = AsyncMock(
         return_value={"thinking": "Found relevant section", "node_list": ["0001"]}
     )
     vlm.answer_with_images = AsyncMock(return_value="The answer is 42")
+    return vlm
 
-    service = SearchService(vlm, llm)
+
+@pytest.fixture
+def mock_llm():
+    llm = MagicMock()
+    llm.search_tree = AsyncMock(
+        return_value={"thinking": "Found relevant section", "node_list": ["0001"]}
+    )
+    llm.answer_with_text = AsyncMock(return_value="The answer is 42")
+    return llm
+
+
+@pytest.mark.asyncio
+async def test_search_pdf(mock_vlm, mock_llm):
+    service = SearchService(mock_vlm, mock_llm)
 
     tree = {"nodes": [{"id": "0001", "title": "Section 1", "page_start": 1, "page_end": 1}]}
 
@@ -32,14 +39,8 @@ async def test_search_pdf(mock_clients):
 
 
 @pytest.mark.asyncio
-async def test_search_markdown(mock_clients):
-    vlm, llm = mock_clients
-    llm.search_tree = AsyncMock(
-        return_value={"thinking": "Found relevant section", "node_list": ["0001"]}
-    )
-    llm.answer_with_text = AsyncMock(return_value="The answer is 42")
-
-    service = SearchService(vlm, llm)
+async def test_search_markdown(mock_vlm, mock_llm):
+    service = SearchService(mock_vlm, mock_llm)
 
     tree = {"nodes": [{"id": "0001", "title": "Section 1", "content": "Test content"}]}
 
