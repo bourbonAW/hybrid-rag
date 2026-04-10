@@ -120,13 +120,23 @@ class GlobalSearchRequest(BaseModel):
 
 
 class DocumentSource(BaseModel):
-    """Document source reference model."""
+    """Document source reference model.
+
+    PageIndex strategy fills: section_title, page_refs, node_id.
+    Hybrid Search strategy fills: chunk_index, score, text_preview.
+    All strategy-specific fields are optional.
+    """
 
     document_id: str
     document_name: str
-    section_title: str
-    page_refs: list[int]
-    node_id: str
+    # PageIndex fields
+    section_title: str | None = None
+    page_refs: list[int] = Field(default_factory=list)
+    node_id: str | None = None
+    # Hybrid Search fields
+    chunk_index: int | None = None
+    score: float | None = None
+    text_preview: str | None = None
 
 
 class GlobalSearchResponse(BaseModel):
