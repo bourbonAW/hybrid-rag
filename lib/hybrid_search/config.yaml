@@ -1,0 +1,36 @@
+# Hybrid Search 配置 (BM25 + Vector)
+# 基于 Qdrant 实现原生 Hybrid Search
+
+enabled: true
+
+# 存储配置
+storage:
+  path: "./storage/hybrid_search"
+  collection_name_template: "doc_{document_id}"
+
+# Chunking 配置
+chunking:
+  chunk_size: 512
+  chunk_overlap: 50
+  separators: ["\n\n", "\n", ". ", " "]
+
+# Embedding 配置
+embedding:
+  model: "BAAI/bge-small-en-v1.5"
+  dimensions: 384
+  batch_size: 32
+
+# Sparse/BM25 配置
+sparse:
+  enabled: true
+
+# Hybrid 融合配置
+fusion:
+  method: "rrf"
+  rrf_k: 60
+
+# 检索配置
+retrieval:
+  top_k_sparse: 20
+  top_k_dense: 20
+  final_top_k: 10
