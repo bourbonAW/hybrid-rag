@@ -1,5 +1,6 @@
 """Document processing service."""
 
+import asyncio
 import hashlib
 import json
 import shutil
@@ -143,16 +144,19 @@ class DocumentService:
             if self.hybrid_search and HYBRID_SEARCH_AVAILABLE:
                 index_builders.append(("hybrid_search", self._build_hybrid_search(doc_id, text, storage_dir)))
 
-            # 执行所有索引构建，跟踪成功/失败
-            for index_name, builder_coro in index_builders:
-                try:
-                    await builder_coro
-                    available_indexes.append(index_name)
-                    print(f"[DocumentService] {index_name} index built successfully for {doc_id}")
-                except Exception as e:
-                    error_msg = str(e)
-                    failed_indexes[index_name] = error_msg
-                    print(f"[DocumentService] {index_name} index failed for {doc_id}: {error_msg}")
+            # 并行执行所有索引构建，跟踪成功/失败
+            if index_builders:
+                names = [name for name, _ in index_builders]
+                coros = [coro for _, coro in index_builders]
+                results = await asyncio.gather(*coros, return_exceptions=True)
+                for index_name, result in zip(names, results):
+                    if isinstance(result, Exception):
+                        error_msg = str(result)
+                        failed_indexes[index_name] = error_msg
+                        print(f"[DocumentService] {index_name} index failed for {doc_id}: {error_msg}")
+                    else:
+                        available_indexes.append(index_name)
+                        print(f"[DocumentService] {index_name} index built successfully for {doc_id}")
 
             # 更新文档索引状态
             await self.store.update_indexes(doc_id, available_indexes, failed_indexes)
