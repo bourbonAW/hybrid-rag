@@ -327,14 +327,16 @@ class DocumentService:
         doc = Document(docx_path)
         markdown_lines = []
 
-        # 提取文档标题（如果有）
-        has_title = False
-        for paragraph in doc.paragraphs[:5]:  # 检查前5个段落
+        # 找到第一个非空段落文本，作为文档标题（仅当它不是已有标题样式时）
+        injected_title_text: str | None = None
+        for paragraph in doc.paragraphs[:5]:
             text = paragraph.text.strip()
-            if text and not has_title:
-                # 将第一个非空段落作为文档标题
-                markdown_lines.append(f"# {text}\n\n")
-                has_title = True
+            if text:
+                style_name = paragraph.style.name.lower()
+                # 如果第一段已经是标题样式，不需要额外注入
+                if not any(f"heading {i}" in style_name for i in range(1, 7)):
+                    markdown_lines.append(f"# {text}\n\n")
+                    injected_title_text = text
                 break
 
         # 处理段落
@@ -358,8 +360,9 @@ class DocumentService:
             elif "heading 6" in style_name:
                 markdown_lines.append(f"###### {text}\n\n")
             else:
-                # 跳过已经作为标题的段落
-                if has_title and text == markdown_lines[0].strip("# \n"):
+                # 跳过已经手动注入为标题的段落（只跳过一次）
+                if injected_title_text is not None and text == injected_title_text:
+                    injected_title_text = None
                     continue
                 markdown_lines.append(f"{text}\n\n")
 

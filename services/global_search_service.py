@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from models.document_store import DocumentStore
 from services.document_service import DocumentService
-from services.legacy.llm_client import LLMClient
+from services.llm_client import LLMClient
 from services.search_service import SearchService
 
 # Import LightRAG wrapper
@@ -633,7 +633,8 @@ class GlobalSearchService:
             if not tree:
                 return None
 
-            storage_path = f"./storage/{candidate.doc_id}"
+            from config import settings
+            storage_path = str(settings.storage_path / candidate.doc_id)
 
             search_response = await self.search_service.search(
                 query=query,

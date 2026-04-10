@@ -356,7 +356,7 @@ async def global_search(request: GlobalSearchRequest):
     - "hybrid_search": BM25 + Vector 语义混合检索
     """
     # 获取策略参数（如果请求模型支持）
-    strategy = getattr(request, "strategy", "auto")
+    strategy = request.strategy
 
     result = await global_search_service.search(
         query=request.query,
