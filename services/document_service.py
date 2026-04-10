@@ -9,7 +9,7 @@ from typing import Optional
 from config import settings
 from models.document_store import DocumentStore
 from models.schemas import DocumentStatus
-from services.pageindex_wrapper import PageIndexWrapper
+from lib.pageindex_wrapper import PageIndexWrapper
 
 # Import LightRAG wrapper
 try:
@@ -118,6 +118,11 @@ class DocumentService:
             original_path = storage_dir / f"original.{file_format}"
             shutil.copy(file_path, original_path)
 
+            # Delete temp upload file now that it has been copied
+            temp = Path(file_path)
+            if temp.exists() and temp.name.startswith("temp_"):
+                temp.unlink()
+
             # 提取文本（根据格式）
             text = await self._extract_text(original_path, file_format)
 
@@ -126,7 +131,7 @@ class DocumentService:
 
             if self.pageindex:
                 index_builders.append(
-                    ("pageindex", self._build_pageindex_wrapper(doc_id, original_path, file_format, storage_dir))
+                    ("pageindex", self._build_pageindex(doc_id, original_path, file_format, storage_dir))
                 )
 
             if self.lightrag and LIGHTRAG_AVAILABLE:
@@ -167,12 +172,6 @@ class DocumentService:
             await self.store.update_status(doc_id, DocumentStatus.FAILED, error_msg)
             failed_indexes["_process"] = error_msg
             return False, available_indexes, failed_indexes
-
-    async def _build_pageindex_wrapper(
-        self, doc_id: str, original_path: Path, file_format: str, storage_dir: Path
-    ) -> dict:
-        """Wrapper for PageIndex building."""
-        return await self._build_pageindex(doc_id, original_path, file_format, storage_dir)
 
     async def _extract_text(self, file_path: Path, file_format: str) -> str:
         """从文件中提取纯文本."""
