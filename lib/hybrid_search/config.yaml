@@ -6,7 +6,7 @@ enabled: true
 # 存储配置
 storage:
   path: "./storage/hybrid_search"
-  collection_name_template: "doc_{document_id}"
+  collection_name: "hybrid_chunks"
 
 # Chunking 配置
 chunking:

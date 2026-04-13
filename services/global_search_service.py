@@ -434,7 +434,12 @@ class GlobalSearchService:
     async def _search_hybrid_search(
         self, query: str, top_k_documents: int, top_k_results_per_doc: int
     ) -> GlobalSearchResult:
-        """Hybrid Search (BM25 + Vector) 搜索.
+        """Hybrid Search (BM25 + Vector) 全局检索.
+
+        所有文档共享同一个 Qdrant collection，直接在全局做 RRF 融合检索，
+        结果按相关性自然跨文档排序——BM25 的 IDF 统计也是全局一致的。
+
+        参数 `top_k_documents` * `top_k_results_per_doc` 作为全局返回 chunk 上限。
 
         适用于：关键词精确匹配、术语检索、代码片段查找
         """
@@ -442,67 +447,57 @@ class GlobalSearchService:
             raise ValueError("Hybrid Search not configured")
 
         start_time = time.time()
-        print("[GlobalSearch] Using Hybrid Search strategy (BM25 + Vector)")
+        print("[GlobalSearch] Using Hybrid Search strategy (BM25 + Vector, global)")
 
-        # 阶段1: 文档选择（检查索引可用性）
-        print("[GlobalSearch] Phase 1: Document Selection with Strategy Check")
-        candidates = await self._select_documents(query, top_k_documents)
+        fallback_reasons: list[str] = []
+        global_top_k = max(top_k_documents * top_k_results_per_doc, top_k_results_per_doc)
 
-        # 策略回退：检查每个文档是否有 hybrid_search 索引
-        strategy_map = {}
-        fallback_reasons = []
-        valid_candidates = []
-
-        for candidate in candidates:
-            doc = await self.doc_store.get(candidate.doc_id)
-            if doc and "hybrid_search" in doc.available_indexes:
-                strategy_map[candidate.doc_id] = "hybrid_search"
-                valid_candidates.append(candidate)
-            else:
-                # Skip documents without hybrid_search index
-                fallback_reasons.append(
-                    f"Document {candidate.doc_id} skipped: hybrid_search index not available"
-                )
-
-        if not valid_candidates:
+        # 单次全局检索，结果已跨文档排序
+        try:
+            result = await self.hybrid_search.search(
+                query=query,
+                doc_ids=None,
+                top_k=global_top_k,
+            )
+        except Exception as e:
+            print(f"[GlobalSearch] Hybrid search failed: {e}")
             processing_time = (time.time() - start_time) * 1000
             return GlobalSearchResult(
                 query=query,
-                final_answer="未找到支持 hybrid_search 的文档。",
+                final_answer=f"Hybrid Search 执行失败：{e}",
                 sources=[],
-                document_selection_reasoning="Hybrid Search strategy selected but no compatible documents found",
+                document_selection_reasoning="Hybrid Search (global)",
                 total_documents_searched=0,
                 processing_time_ms=processing_time,
                 strategy_used={},
-                fallback_reasons=fallback_reasons,
+                fallback_reasons=[str(e)],
             )
 
-        print(f"[GlobalSearch] Selected {len(valid_candidates)} documents with hybrid_search support")
+        chunks = result.get("results") or []
+        print(f"[GlobalSearch] Retrieved {len(chunks)} chunks across all documents")
 
-        # 阶段2: 对每个文档执行 Hybrid Search
-        print("[GlobalSearch] Phase 2: Hybrid Search Retrieval")
-        all_results = []
-        for candidate in valid_candidates:
-            try:
-                result = await self.hybrid_search.search(
-                    query=query,
-                    document_id=candidate.doc_id,
-                    top_k=top_k_results_per_doc,
-                )
-                if result.get("results"):
-                    all_results.append({
-                        "doc_id": candidate.doc_id,
-                        "filename": candidate.filename,
-                        "chunks": result["results"],
-                    })
-            except Exception as e:
-                print(f"[GlobalSearch] Hybrid search failed for {candidate.doc_id}: {e}")
-                fallback_reasons.append(f"Search failed for {candidate.doc_id}: {str(e)}")
+        # 按 doc_id 分组，并补齐 filename（用于引用展示）
+        grouped: dict[str, dict[str, Any]] = {}
+        strategy_map: dict[str, str] = {}
+        for chunk in chunks:
+            doc_id = chunk.get("doc_id")
+            if not doc_id:
+                continue
+            if doc_id not in grouped:
+                doc = await self.doc_store.get(doc_id)
+                filename = doc.filename if doc else doc_id
+                grouped[doc_id] = {
+                    "doc_id": doc_id,
+                    "filename": filename,
+                    "chunks": [],
+                }
+                strategy_map[doc_id] = "hybrid_search"
+            grouped[doc_id]["chunks"].append(chunk)
 
-        print(f"[GlobalSearch] Retrieved results from {len(all_results)} documents")
+        all_results = list(grouped.values())
 
-        # 阶段3: 答案聚合
-        print("[GlobalSearch] Phase 3: Answer Synthesis")
+        # 答案聚合
+        print("[GlobalSearch] Synthesizing answer from global hybrid results")
         final_answer, sources = await self._synthesize_hybrid_answer(query, all_results)
         print(f"[GlobalSearch] Final answer synthesized with {len(sources)} sources")
 
@@ -512,8 +507,8 @@ class GlobalSearchService:
             query=query,
             final_answer=final_answer,
             sources=sources,
-            document_selection_reasoning="Hybrid Search (BM25 + Vector RRF fusion)",
-            total_documents_searched=len(valid_candidates),
+            document_selection_reasoning="Global Hybrid Search (BM25 + Vector RRF fusion)",
+            total_documents_searched=len(all_results),
             processing_time_ms=processing_time,
             strategy_used=strategy_map,
             fallback_reasons=fallback_reasons,

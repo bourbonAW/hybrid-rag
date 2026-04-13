@@ -13,10 +13,15 @@
 基于 Qdrant 实现 BM25 + Vector Hybrid Search。
 """
 
+import uuid
+import warnings
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+# 用于生成稳定的 chunk point ID
+_POINT_ID_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
 
 class HybridSearchWrapper:
@@ -24,6 +29,10 @@ class HybridSearchWrapper:
 
     结合 BM25 (稀疏检索) 和 Dense Vector (语义检索)，
     使用 RRF (Reciprocal Rank Fusion) 融合结果。
+
+    设计：所有文档共享同一个 Qdrant collection，通过 payload.doc_id 过滤。
+    这是 Qdrant 官方推荐的多租户模式——避免 per-document collection 无法
+    跨文档检索、BM25 IDF 统计被切分、资源浪费等问题。
     """
 
     def __init__(self, config_path: Path | None = None):
@@ -46,12 +55,14 @@ class HybridSearchWrapper:
         self.storage_path = Path(self.config["storage"]["path"])
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
+        self.collection_name: str = self.config["storage"]["collection_name"]
+
         self._client: Any | None = None
         self._dense_embedder: Any | None = None
         self._sparse_embedder: Any | None = None
 
     async def initialize(self) -> None:
-        """初始化 Qdrant 客户端和 embedding 模型."""
+        """初始化 Qdrant 客户端、embedding 模型和全局 collection."""
         if self._client is not None:
             return
 
@@ -73,7 +84,13 @@ class HybridSearchWrapper:
                 model_name="Qdrant/bm42-all-minilm-l6-v2-attentions"
             )
 
-        print(f"[HybridSearchWrapper] Initialized with model: {embed_model}")
+        # 创建全局 collection 并为 doc_id 建索引，便于过滤
+        await self._ensure_collection()
+
+        print(
+            f"[HybridSearchWrapper] Initialized: model={embed_model}, "
+            f"collection={self.collection_name}"
+        )
 
     async def index_document(
         self,
@@ -82,6 +99,10 @@ class HybridSearchWrapper:
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """为文档构建 Hybrid Search 索引.
+
+        所有 chunk 写入同一个全局 collection，通过 payload.doc_id 区分。
+        Point ID 使用 uuid5(doc_id, chunk_index) 保证幂等性——
+        重复索引同一文档会覆盖旧的 chunk。
 
         Args:
             document_id: 文档唯一标识
@@ -93,7 +114,6 @@ class HybridSearchWrapper:
         """
         if not self._client:
             raise RuntimeError("HybridSearch not initialized")
-        # 确保 embedder 已初始化
         assert self._dense_embedder is not None, "Dense embedder not initialized"
 
         print(f"[HybridSearchWrapper] Indexing document: {document_id}")
@@ -102,9 +122,8 @@ class HybridSearchWrapper:
         chunks = self._chunk_text(text)
         print(f"[HybridSearchWrapper] Created {len(chunks)} chunks")
 
-        # 2. 创建 collection (如果不存在)
-        collection_name = self._get_collection_name(document_id)
-        await self._create_collection_if_not_exists(collection_name)
+        # 2. 先清理该文档旧 chunk（若存在），避免重复索引 chunk 数量变化时残留
+        await self._delete_by_doc_id(document_id)
 
         # 3. 生成 embeddings
         dense_embeddings = list(self._dense_embedder.embed(chunks))
@@ -112,11 +131,14 @@ class HybridSearchWrapper:
         if self._sparse_embedder:
             sparse_embeddings = list(self._sparse_embedder.embed(chunks))
 
-        # 4. 准备 points
+        # 4. 准备 points（deterministic UUID 便于去重/覆盖）
         points = []
         for i, (chunk, dense_vec) in enumerate(zip(chunks, dense_embeddings, strict=False)):
+            point_id = str(
+                uuid.uuid5(_POINT_ID_NAMESPACE, f"{document_id}:{i}")
+            )
             point = self._models.PointStruct(
-                id=i,
+                id=point_id,
                 vector={
                     "dense": dense_vec.tolist(),
                 },
@@ -128,7 +150,6 @@ class HybridSearchWrapper:
                 },
             )
 
-            # 添加 sparse vector
             if sparse_embeddings:
                 sparse_vec = sparse_embeddings[i]
                 point.vector["sparse"] = self._models.SparseVector(
@@ -139,87 +160,98 @@ class HybridSearchWrapper:
             points.append(point)
 
         # 5. 写入 Qdrant
-        await self._client.upsert(collection_name=collection_name, points=points)
+        await self._client.upsert(collection_name=self.collection_name, points=points)
 
         return {
             "document_id": document_id,
             "chunks_count": len(chunks),
-            "collection_name": collection_name,
+            "collection_name": self.collection_name,
             "status": "completed",
         }
 
     async def search(
         self,
         query: str,
-        document_id: str,
+        doc_ids: list[str] | None = None,
         top_k: int | None = None,
         filter_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """执行 Hybrid Search 检索.
+        """执行全局 Hybrid Search 检索.
+
+        默认在所有已索引文档中检索。传入 `doc_ids` 可将检索限定到指定文档子集。
 
         Args:
             query: 查询字符串
-            document_id: 目标文档 ID
+            doc_ids: 可选，限制检索范围的文档 ID 列表；None 表示全局检索
             top_k: 返回结果数量 (默认使用配置)
-            filter_metadata: 可选的元数据过滤
+            filter_metadata: 可选的 payload 过滤条件（AND 语义）
 
         Returns:
-            检索结果，包含 chunks 和融合分数
+            检索结果，包含 chunks 和融合分数（含 doc_id 以便溯源）
         """
         if not self._client:
             raise RuntimeError("HybridSearch not initialized")
-        # 确保 embedder 已初始化
         assert self._dense_embedder is not None, "Dense embedder not initialized"
 
-        collection_name = self._get_collection_name(document_id)
-
-        # 检查 collection 是否存在
-        exists = await self._client.collection_exists(collection_name)
-        if not exists:
-            return {
-                "query": query,
-                "results": [],
-                "error": f"Document {document_id} not indexed",
-            }
-
         top_k = top_k or self.config["retrieval"]["final_top_k"]
+
+        # 构建 payload 过滤器
+        must_conditions = []
+        if doc_ids:
+            must_conditions.append(
+                self._models.FieldCondition(
+                    key="doc_id",
+                    match=self._models.MatchAny(any=list(doc_ids)),
+                )
+            )
+        if filter_metadata:
+            for key, value in filter_metadata.items():
+                must_conditions.append(
+                    self._models.FieldCondition(
+                        key=key,
+                        match=self._models.MatchValue(value=value),
+                    )
+                )
+        query_filter = (
+            self._models.Filter(must=must_conditions) if must_conditions else None
+        )
 
         # 生成 query embeddings
         dense_query = list(self._dense_embedder.embed([query]))[0]
 
-        # 执行 hybrid search with RRF
+        # Hybrid search with RRF；filter 同时作用于两路 prefetch
+        dense_prefetch = self._models.Prefetch(
+            query=dense_query.tolist(),
+            using="dense",
+            limit=self.config["retrieval"]["top_k_dense"],
+            filter=query_filter,
+        )
+        sparse_prefetch = self._models.Prefetch(
+            query=self._models.Document(
+                text=query,
+                model="Qdrant/bm42-all-minilm-l6-v2-attentions",
+            )
+            if self._sparse_embedder
+            else dense_query.tolist(),
+            using="sparse" if self._sparse_embedder else "dense",
+            limit=self.config["retrieval"]["top_k_sparse"],
+            filter=query_filter,
+        )
+
         results = await self._client.query_points(
-            collection_name=collection_name,
-            prefetch=[
-                # Dense retrieval
-                self._models.Prefetch(
-                    query=dense_query.tolist(),
-                    using="dense",
-                    limit=self.config["retrieval"]["top_k_dense"],
-                ),
-                # Sparse retrieval (BM25/BM42)
-                self._models.Prefetch(
-                    query=self._models.Document(
-                        text=query,
-                        model="Qdrant/bm42-all-minilm-l6-v2-attentions",
-                    )
-                    if self._sparse_embedder
-                    else dense_query.tolist(),
-                    using="sparse" if self._sparse_embedder else "dense",
-                    limit=self.config["retrieval"]["top_k_sparse"],
-                ),
-            ],
+            collection_name=self.collection_name,
+            prefetch=[dense_prefetch, sparse_prefetch],
             query=self._models.FusionQuery(fusion=self._models.Fusion.RRF),
             limit=top_k,
         )
 
-        # 格式化结果
         formatted_results = []
         for point in results.points:
             formatted_results.append({
                 "text": point.payload.get("text", ""),
                 "score": point.score,
                 "chunk_index": point.payload.get("chunk_index"),
+                "doc_id": point.payload.get("doc_id"),
                 "metadata": {
                     k: v
                     for k, v in point.payload.items()
@@ -229,7 +261,7 @@ class HybridSearchWrapper:
 
         return {
             "query": query,
-            "document_id": document_id,
+            "doc_ids": doc_ids,
             "results": formatted_results,
             "total_results": len(formatted_results),
         }
@@ -271,46 +303,75 @@ class HybridSearchWrapper:
 
         return chunks
 
-    async def _create_collection_if_not_exists(self, collection_name: str) -> None:
-        """创建 Qdrant collection (如果不存在)."""
+    async def _ensure_collection(self) -> None:
+        """创建全局 collection 并为 doc_id 建立 payload 索引（幂等）."""
         assert self._client is not None, "Client not initialized"
-        exists = await self._client.collection_exists(collection_name)
-        if exists:
-            return
 
-        dims = self.config["embedding"]["dimensions"]
+        exists = await self._client.collection_exists(self.collection_name)
+        if not exists:
+            dims = self.config["embedding"]["dimensions"]
+            await self._client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config={
+                    "dense": self._models.VectorParams(
+                        size=dims,
+                        distance=self._models.Distance.COSINE,
+                    )
+                },
+                sparse_vectors_config={
+                    "sparse": self._models.SparseVectorParams()
+                }
+                if self.config["sparse"]["enabled"]
+                else None,
+            )
 
-        await self._client.create_collection(
-            collection_name=collection_name,
-            vectors_config={
-                "dense": self._models.VectorParams(
-                    size=dims,
-                    distance=self._models.Distance.COSINE,
+        # 为 doc_id 建 payload 索引以加速过滤。
+        # 注意：Qdrant 嵌入（本地）模式下 payload 索引是 no-op，官方会发 UserWarning。
+        # 当前目录式本地存储规模小，线性过滤够用；保留此调用是为了切换到服务端模式时
+        # 自动生效。这里抑制那条噪音 warning。
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=".*Payload indexes have no effect in the local Qdrant.*",
+                    category=UserWarning,
                 )
-            },
-            sparse_vectors_config={
-                "sparse": self._models.SparseVectorParams()
-            }
-            if self.config["sparse"]["enabled"]
-            else None,
-        )
+                await self._client.create_payload_index(
+                    collection_name=self.collection_name,
+                    field_name="doc_id",
+                    field_schema=self._models.PayloadSchemaType.KEYWORD,
+                )
+        except Exception:
+            pass
 
-    def _get_collection_name(self, document_id: str) -> str:
-        """生成 collection 名称."""
-        template = self.config["storage"]["collection_name_template"]
-        return template.format(document_id=document_id.replace("-", "_"))
+    async def _delete_by_doc_id(self, document_id: str) -> int:
+        """按 doc_id 过滤删除该文档的所有 chunk. 返回删除前的匹配数（best-effort）."""
+        assert self._client is not None, "Client not initialized"
+        await self._client.delete(
+            collection_name=self.collection_name,
+            points_selector=self._models.FilterSelector(
+                filter=self._models.Filter(
+                    must=[
+                        self._models.FieldCondition(
+                            key="doc_id",
+                            match=self._models.MatchValue(value=document_id),
+                        )
+                    ]
+                )
+            ),
+        )
+        return 0
 
     async def delete_document(self, document_id: str) -> bool:
-        """删除文档索引."""
+        """删除指定文档的所有 chunk（按 payload.doc_id 过滤）."""
         if not self._client:
             return False
-
-        collection_name = self._get_collection_name(document_id)
-        exists = await self._client.collection_exists(collection_name)
-        if exists:
-            await self._client.delete_collection(collection_name)
+        try:
+            await self._delete_by_doc_id(document_id)
             return True
-        return False
+        except Exception as e:
+            print(f"[HybridSearchWrapper] delete failed for {document_id}: {e}")
+            return False
 
     async def close(self) -> None:
         """关闭资源."""
