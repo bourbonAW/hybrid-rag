@@ -306,29 +306,35 @@ async def delete_document(doc_id: str):
         raise HTTPException(404, "Document not found")
 
     available = doc.available_indexes or []
+    failed = list(doc.failed_indexes.keys()) if doc.failed_indexes else []
+    all_to_clean = set(available) | set(failed)
 
     # Delete from store (SQLite)
     await doc_store.delete(doc_id)
+
+    # Delete temp upload file if it was never cleaned up during processing
+    for temp_file in settings.storage_path.glob(f"temp_{doc_id}_*"):
+        temp_file.unlink(missing_ok=True)
 
     # Delete file storage
     storage_dir = settings.storage_path / doc_id
     if storage_dir.exists():
         shutil.rmtree(storage_dir)
 
-    # Delete from backend indexes that were built for this document
-    if "lightrag" in available and lightrag_wrapper:
+    # Delete from backend indexes (both successfully built and partially failed)
+    if "lightrag" in all_to_clean and lightrag_wrapper:
         try:
             await lightrag_wrapper.delete_document(doc_id)
         except Exception as e:
             print(f"[Delete] LightRAG cleanup failed for {doc_id}: {e}")
 
-    if "hirag" in available and hirag_wrapper:
+    if "hirag" in all_to_clean and hirag_wrapper:
         try:
             await hirag_wrapper.delete_document(doc_id)
         except Exception as e:
             print(f"[Delete] HiRAG cleanup failed for {doc_id}: {e}")
 
-    if "hybrid_search" in available and hybrid_search_wrapper:
+    if "hybrid_search" in all_to_clean and hybrid_search_wrapper:
         try:
             await hybrid_search_wrapper.delete_document(doc_id)
         except Exception as e:

@@ -35,6 +35,7 @@ dependencies = [
     # Semantic BM25 + Vector Search (Hybrid)
     "qdrant-client[fastembed]>=1.12.0",
     "graspologic>=3.4.4",
+    "pyvis>=0.3.2",
 ]
 
 [dependency-groups]

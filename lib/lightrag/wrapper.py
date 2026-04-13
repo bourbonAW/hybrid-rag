@@ -99,9 +99,13 @@ class LightRAGWrapper:
             return
 
         # 构建 LLM 函数（复用项目配置）
+        # 注意：model 必须作为位置参数绑定，因为 LightRAG 调用约定是
+        # llm_model_func(prompt, system_prompt=...) — 第一个位置参数是 prompt。
+        # openai_complete_if_cache 签名是 (model, prompt, ...)，所以用 keyword 绑定
+        # model 会导致 LightRAG 传入 prompt 时出现 "multiple values for argument 'model'"。
         llm_model_func = partial(
             openai_complete_if_cache,
-            model=self.config["llm"]["model"],
+            self.config["llm"]["model"],  # positional: 绑定到 model 参数
             api_key=settings.openai_api_key,
             base_url=settings.openai_base_url,
             max_tokens=self.config["llm"]["max_tokens"],
@@ -113,7 +117,7 @@ class LightRAGWrapper:
             embedding_dim=self.config["embedding"]["dimensions"],
             max_token_size=self.config["embedding"]["max_token_size"],
             func=partial(
-                openai_embed,
+                openai_embed.func,
                 model=self.config["embedding"]["model"],
                 api_key=settings.openai_api_key,
                 base_url=settings.openai_base_url,
